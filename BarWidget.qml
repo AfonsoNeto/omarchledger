@@ -81,7 +81,7 @@ BarWidget {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: "\ue0d6"
+    text: "\uF24E"
     tooltipText: "Omarchledger"
 
     onPressed: function(b) {
