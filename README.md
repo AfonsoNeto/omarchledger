@@ -7,6 +7,21 @@ keyboard-driven popup panel.
 
 ![preview](preview.png)
 
+## Screenshots
+
+**Add** — description autocomplete accepted, postings prefilled via
+"use similar" from the most recent matching transaction:
+
+![Add tab](preview-add.png)
+
+**Balance** — your `hledger bs` balance sheet, negatives highlighted:
+
+![Balance tab](preview-balance.png)
+
+**Summary** — `hledger stats` at a glance, stale journals flagged:
+
+![Summary tab](preview-summary.png)
+
 ## Features
 
 **Add tab** — a form that mirrors `hledger add`:
