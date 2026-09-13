@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "afonsoneto.omarchledger",
+  "name": "Omarchledger",
+  "version": "0.1.0",
+  "author": "Afonso Neto",
+  "license": "MIT",
+  "description": "Quickly add hledger transactions and view your balance sheet and stats from the Omarchy bar.",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Omarchledger",
+    "description": "Quick-add hledger transactions, view balance sheet and stats.",
+    "category": "Finance",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "hledgerBin": "",
+      "journalFile": ""
+    }
+  }
+}
