@@ -515,7 +515,7 @@ Panel {
         Text {
           width: parent.width
           visible: service.resolveError === ""
-          text: service.resolved ? ("📄 " + service.journalFile) : "Resolving journal…"
+          text: service.resolved ? ("📄 " + (service.journalFile.indexOf("/home/") === 0 ? service.journalFile.replace(/^\/home\/[^/]+/, "~") : service.journalFile)) : "Resolving journal…"
           color: root.mutedForeground
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.caption
