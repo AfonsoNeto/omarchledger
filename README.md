@@ -1,11 +1,11 @@
+![preview](preview.png)
+
 # Omarchledger
 
 > An [Omarchy](https://omarchy.org/) bar plugin that puts your
 > [hledger](https://hledger.org/) plain-text accounting one click away —
 > quick-add transactions with autocomplete, your balance sheet, and journal
 > statistics, all in a keyboard-driven popup panel.
-
-![preview](preview.png)
 
 ## Features
 
@@ -227,17 +227,6 @@ These are ideas under consideration — feedback and contributions welcome:
 - [ ] Date picker / smart date input
 - [ ] Graphical settings panel integration
 - [ ] Multi-currency-aware auto-balancing
-
-## Marketplace submission
-
-To submit this plugin to the
-[Omarchy Plugin Marketplace](https://plugins.omarchy.org/), open the
-[submit-plugin issue form](https://github.com/omacom/omarchy-plugin-marketplace/issues/new?template=submit-plugin.yml)
-with:
-
-- **Repository URL:** `https://github.com/AfonsoNeto/omarchledger.git`
-- **Category:** Finance
-- **Tags:** hledger, ledger, accounting, plain-text accounting, finance
 
 ## License
 
