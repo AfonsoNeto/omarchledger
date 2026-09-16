@@ -78,7 +78,7 @@ a terminal for anything the form doesn't cover.
 ## Installation
 
 ```bash
-omarchy plugin add https://github.com/afonsoneto/omarchledger.git --enable
+omarchy plugin add https://github.com/AfonsoNeto/omarchledger.git --enable
 ```
 
 Then click the ⚖ icon in the bar's right section.
@@ -164,7 +164,7 @@ Contributions are welcome! To work on the plugin locally:
 1. **Clone it into Omarchy's plugin directory:**
 
    ```bash
-   git clone https://github.com/afonsoneto/omarchledger.git \
+   git clone https://github.com/AfonsoNeto/omarchledger.git \
      ~/.config/omarchy/plugins/afonsoneto.omarchledger
    omarchy plugin enable afonsoneto.omarchledger
    ```
@@ -221,7 +221,7 @@ To submit this plugin to the
 [submit-plugin issue form](https://github.com/omacom/omarchy-plugin-marketplace/issues/new?template=submit-plugin.yml)
 with:
 
-- **Repository URL:** `https://github.com/afonsoneto/omarchledger.git`
+- **Repository URL:** `https://github.com/AfonsoNeto/omarchledger.git`
 - **Category:** Finance
 - **Tags:** hledger, ledger, accounting, plain-text accounting, finance
 
