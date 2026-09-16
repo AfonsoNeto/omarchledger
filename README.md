@@ -87,6 +87,20 @@ Then click the ⚖ icon in the bar's right section.
 > After installation, `omarchy restart shell` may be needed on some systems
 > for the bar icon to appear.
 
+## Uninstallation
+
+To remove the plugin:
+
+```bash
+omarchy plugin remove afonsoneto.omarchledger
+```
+
+Or to temporarily disable it without deleting the files:
+
+```bash
+omarchy plugin disable afonsoneto.omarchledger
+```
+
 ## Configuration
 
 The journal file and hledger binary are **discovered automatically** —
