@@ -33,6 +33,11 @@ keyboard-driven popup panel.
   `hledger add`'s similar-transaction prompt.
 - **Any number of postings** — use `+ SPLIT` for split transactions. The last
   posting may be left without an amount; hledger auto-balances it.
+- **Live auto-balancing** — edit any posting's amount and the next posting is
+  updated as you type so the transaction always sums to zero, mirroring
+  `hledger add`'s running-balance suggestion. Works on prefilled and manually
+  built transactions; empty amounts count as zero and cost/lot expressions
+  (e.g. `1 BTC @ £45500.25`) are left untouched.
 - **Account autocomplete** from your chart of accounts (`hledger accounts`).
 - Optional **comment / tags** line (rendered as `; your tags`).
 - Every transaction is **validated with `hledger check` before it is

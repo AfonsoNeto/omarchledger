@@ -241,6 +241,83 @@ Panel {
     }
   }
 
+  /* ---- Live balancing ----------------------------------------------------- */
+  // Mirrors `hledger add`: after an amount is entered, the next posting's
+  // amount is the one that keeps the transaction balanced. We recompute it
+  // live whenever the user edits an amount (and never for programmatic
+  // writes — see the `balancing` flag).
+  property bool balancing: false
+
+  /*
+    Parse a simple amount like "£-15.94", "-15.94", "£30", "R$-6.16".
+    Returns {commodity, value, decimals} or null when the text is empty or
+    not a plain single-commodity amount (cost/lot expressions etc.).
+  */
+  function parseSimpleAmount(text) {
+    var s = (text || "").trim()
+    if (s === "") return null
+    var m = s.match(/^([^\d\s.+-]+)?\s*([-+]?[0-9](?:[0-9.,]*[0-9])?)$/)
+    if (m === null) return null
+    var normalized = m[2].replace(",", ".")
+    var value = parseFloat(normalized)
+    if (isNaN(value)) return null
+    var dot = normalized.indexOf(".")
+    return {
+      commodity: m[1] || "",
+      value: value,
+      decimals: dot === -1 ? 0 : normalized.length - dot - 1
+    }
+  }
+
+  /*
+    Given the list of amount strings currently in the form and the index the
+    user just edited, return the amount string posting index+1 should show so
+    the transaction sums to zero — or null for "leave it alone".
+    Empty amounts count as zero (hledger auto-balances them at the end);
+    amounts we cannot parse abort the whole update.
+  */
+  function balancingAmountFor(amounts, editedIndex) {
+    if (editedIndex + 1 >= amounts.length) return null
+    var sum = 0
+    var decimals = 0
+    for (var k = 0; k < amounts.length; k++) {
+      if (k === editedIndex + 1) continue
+      var p = parseSimpleAmount(amounts[k])
+      if (p === null) {
+        if (amounts[k].trim() === "") continue   // empty = 0; hledger auto-balances it later
+        return null
+      }
+      sum += p.value
+      if (p.decimals > decimals) decimals = p.decimals
+    }
+    var edited = parseSimpleAmount(amounts[editedIndex])
+    if (edited === null) return null
+    if (edited.decimals > decimals) decimals = edited.decimals
+    var next = parseSimpleAmount(amounts[editedIndex + 1])
+    if (next !== null && next.decimals > decimals) decimals = next.decimals
+    var value = -sum
+    if (decimals === 0 && Math.abs(value - Math.round(value)) > 1e-9) decimals = 2
+    if (Math.abs(value) < Math.pow(10, -decimals) / 2) value = 0
+    var commodity = edited.commodity !== "" ? edited.commodity : (next !== null ? next.commodity : "")
+    return commodity + value.toFixed(decimals)
+  }
+
+  function autoBalanceAfter(index) {
+    var amounts = []
+    for (var i = 0; i < postingsModel.count; i++)
+      amounts.push(postingsModel.get(i).amount)
+    var result = balancingAmountFor(amounts, index)
+    if (result !== null) root.setAmountProgrammatic(index + 1, result)
+  }
+
+  function setAmountProgrammatic(index, value) {
+    root.balancing = true
+    var d = postingsRepeater.itemAt(index)
+    if (d) d.applyAmount(value)
+    else postingsModel.setProperty(index, "amount", value)
+    root.balancing = false
+  }
+
   /* ---- Submit / clear ------------------------------------------------------- */
   function submitTransaction() {
     root.showSuggestions = false
@@ -705,7 +782,7 @@ Panel {
 
               Text {
                 anchors.right: parent.right
-                text: "last empty amount = auto-balance"
+                text: "edits rebalance the next posting"
                 color: Qt.rgba(root.contentForeground.r, root.contentForeground.g, root.contentForeground.b, 0.35)
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.caption
@@ -741,6 +818,11 @@ Panel {
                   accInput.text = value
                   postingsModel.setProperty(postingRow.index, "account", value)
                   amtInput.forceActiveFocus()
+                }
+                function applyAmount(value) {
+                  amtInput.text = value
+                  if (amtInput.text !== postingRow.amount)
+                    postingsModel.setProperty(postingRow.index, "amount", value)
                 }
 
                 TextInput {
@@ -822,8 +904,10 @@ Panel {
                     }
                   }
                   onTextChanged: {
-                    if (text !== postingRow.amount)
+                    if (text !== postingRow.amount) {
                       postingsModel.setProperty(postingRow.index, "amount", text)
+                      if (!root.balancing) root.autoBalanceAfter(postingRow.index)
+                    }
                   }
                   Keys.onPressed: function(event) {
                     root.handleFieldKey(event, postingRow.index === postingsModel.count - 1)
