@@ -131,7 +131,7 @@ Panel {
   }
 
   function fieldTextChanged(target, text) {
-    if (root.suggestTarget === target && root.showSuggestions) {
+    if (root.suggestTarget === target) {
       root.suggestFilter = text
       root.suggestIndex = 0
       root.showSuggestions = root.filteredSuggestions().length > 0
