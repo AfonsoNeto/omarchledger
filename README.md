@@ -1,44 +1,29 @@
 # Omarchledger
 
-A bar plugin for [Omarchy](https://omarchy.org/) that puts your
-[hledger](https://hledger.org/) ledger one click away: quick-add transactions
-with autocomplete, your balance sheet, and journal statistics — all in a
-keyboard-driven popup panel.
+> An [Omarchy](https://omarchy.org/) bar plugin that puts your
+> [hledger](https://hledger.org/) plain-text accounting one click away —
+> quick-add transactions with autocomplete, your balance sheet, and journal
+> statistics, all in a keyboard-driven popup panel.
 
 ![preview](preview.png)
 
-## Screenshots
-
-**Add** — description autocomplete accepted, postings prefilled via
-"use similar" from the most recent matching transaction:
-
-![Add tab](preview-add.png)
-
-**Balance** — your `hledger bs` balance sheet, negatives highlighted:
-
-![Balance tab](preview-balance.png)
-
-**Summary** — `hledger stats` at a glance, stale journals flagged:
-
-![Summary tab](preview-summary.png)
-
 ## Features
 
-**Add tab** — a form that mirrors `hledger add`:
+### Add tab
 
-- **Description autocomplete** from your transaction history
-  (`hledger descriptions`). Accepting a suggestion automatically offers
-  **"use similar"**: the most recent transaction with that description is
-  fetched and all its postings (with amounts) prefill the form, just like
-  `hledger add`'s similar-transaction prompt.
+A form that mirrors `hledger add`, right from the bar:
+
+- **Description autocomplete** from your journal history
+  (`hledger descriptions`). Accepting a suggestion offers **"use similar"**:
+  the most recent matching transaction is fetched and its postings prefill the
+  form — just like `hledger add`'s similar-transaction prompt.
+- **Account autocomplete** from your chart of accounts (`hledger accounts`).
 - **Any number of postings** — use `+ SPLIT` for split transactions. The last
   posting may be left without an amount; hledger auto-balances it.
-- **Live auto-balancing** — edit any posting's amount and the next posting is
-  updated as you type so the transaction always sums to zero, mirroring
-  `hledger add`'s running-balance suggestion. Works on prefilled and manually
-  built transactions; empty amounts count as zero and cost/lot expressions
-  (e.g. `1 BTC @ £45500.25`) are left untouched.
-- **Account autocomplete** from your chart of accounts (`hledger accounts`).
+- **Live auto-balancing** — edit any posting's amount and the next posting
+  updates as you type so the transaction always sums to zero. Works on
+  prefilled and manually built transactions; empty amounts count as zero and
+  cost/lot expressions (e.g. `1 BTC @ £45500.25`) are left untouched.
 - Optional **comment / tags** line (rendered as `; your tags`).
 - Every transaction is **validated with `hledger check` before it is
   appended** — an invalid entry (unbalanced, unknown account, bad amount…)
@@ -46,73 +31,200 @@ keyboard-driven popup panel.
 - Made a mistake? Every add offers an **UNDO** button (works as long as the
   journal file hasn't changed since).
 
-**Balance tab** — your `hledger bs` balance sheet with Assets / Liabilities
-sections, negatives highlighted, and the Net total accented.
+### Balance tab
 
-**Summary tab** — `hledger stats` as a clean key/value table; a stale
-journal ("Last txn … days ago") is highlighted.
+Your `hledger bs` balance sheet with Assets / Liabilities sections, negatives
+highlighted in red, and the Net total accented.
 
-### Keyboard flow
+### Summary tab
+
+`hledger stats` as a clean key/value table; a stale journal ("Last txn … days
+ago") is highlighted.
+
+## Screenshots
+
+| Add | Balance | Summary |
+| --- | ------- | ------- |
+| ![Add tab](preview-add.png) | ![Balance tab](preview-balance.png) | ![Summary tab](preview-summary.png) |
+
+**Add** — description autocomplete accepted, postings prefilled via "use
+similar" from the most recent matching transaction.
+
+**Balance** — structured balance sheet, negatives in red.
+
+**Summary** — journal stats at a glance, stale journals flagged.
+
+## Keyboard shortcuts
 
 | Key | Action |
 | --- | --- |
-| `1` `2` `3` / `←` `→` | switch tab (when no field is focused) |
-| `Enter` (no field focused) | start filling the form (focuses the date) |
-| `r` | refresh Balance/Summary |
-| `u` | undo the last add, when offered |
-| `Tab` / `Shift+Tab` | next / previous field |
-| `↑` `↓` / `Enter` | navigate / accept autocomplete |
-| `Enter` (on last amount) | add the transaction |
-| `Esc` | close suggestions, then the panel |
+| `1` `2` `3` / `←` `→` | Switch tab (when no field is focused) |
+| `Enter` (no field focused) | Start filling the form (focuses the date) |
+| `r` | Refresh Balance / Summary |
+| `u` | Undo the last add (when offered) |
+| `Tab` / `Shift+Tab` | Next / previous field |
+| `↑` `↓` / `Enter` | Navigate / accept autocomplete |
+| `Enter` (on last amount) | Add the transaction |
+| `Esc` | Close suggestions, then the panel |
 
 The header also has a **⌨ TERMINAL** button that opens real `hledger add` in
 a terminal for anything the form doesn't cover.
 
 ## Requirements
 
-- Omarchy (built and tested against the Omarchy shell / Quickshell)
+- [Omarchy](https://omarchy.org/) Quattro (tested with Omarchy 4.x / Quickshell 0.3.x)
 - [`hledger`](https://hledger.org/install.html) on `PATH`
 
-## Install
+## Installation
 
-```
+```bash
 omarchy plugin add https://github.com/afonsoneto/omarchledger.git --enable
 ```
 
-Then click the money icon in the bar's right section.
+Then click the ⚖ icon in the bar's right section.
+
+> [!TIP]
+> After installation, `omarchy restart shell` may be needed on some systems
+> for the bar icon to appear.
 
 ## Configuration
 
-The journal and binary are discovered automatically — `LEDGER_FILE` (and
-hledger's `~/.hledger.journal` default) are honored; nothing is hardcoded.
-Two optional settings can be set on the widget's entry in
-`~/.config/omarchy/shell.json` if you need overrides:
+The journal file and hledger binary are **discovered automatically** —
+`LEDGER_FILE`, hledger's `~/.hledger.journal` default, and `command -v hledger`
+are all honored. Nothing is hardcoded.
+
+Two optional overrides can be set on the widget's entry in
+`~/.config/omarchy/shell.json`:
 
 ```jsonc
 "right": [
   {
     "id": "afonsoneto.omarchledger",
-    "hledgerBin": "/custom/path/to/hledger",  // default: command -v hledger
-    "journalFile": "/custom/path/to/ledger.journal"  // default: hledger files (line 1)
+    "hledgerBin": "/custom/path/to/hledger",      // default: command -v hledger
+    "journalFile": "/custom/path/to/ledger.journal" // default: hledger files (line 1)
   }
 ]
 ```
 
 ## How writes stay safe
 
-The plugin never edits your journal directly on a best-effort basis. The
-proposed transaction is appended to a temporary copy of the journal (in the
-journal's own directory, so relative `include` directives keep working) and
-validated with `hledger check`. Only if that passes is the entry appended to
-the real journal. The UNDO button truncates the journal back to its exact
-previous size and refuses to run if the file changed in the meantime.
+This plugin takes journal integrity seriously:
 
-## Publishing
+1. The proposed transaction is appended to a **temporary copy** of the journal
+   (created in the journal's own directory, so relative `include` directives
+   keep working) and validated with `hledger check`.
+2. **Only if validation passes** is the entry appended to the real journal.
+   On failure, hledger's error message is shown verbatim and nothing is
+   written.
+3. The **UNDO** button records the journal's exact byte size before and after
+   the append. It truncates the journal back to its previous size and
+   **refuses to run** if the file has changed in the meantime — it can never
+   clobber later edits.
+4. Temporary files are always cleaned up, even on failure.
 
-To submit this plugin to the Omarchy plugin marketplace, open the
-[submit-plugin issue form](https://github.com/omacom/omarchy-plugin-marketplace)
-with this repository's URL, a category and tags.
+## Security & permissions
+
+> [!IMPORTANT]
+> Omarchy plugins run **unsandboxed** with your user permissions. This plugin:
+>
+> - **Reads** your hledger journal to display balances, stats, descriptions,
+>   and accounts.
+> - **Appends** to your journal when you submit a transaction (never edits
+>   existing content).
+> - **Truncates** the journal only when you explicitly press UNDO, and only if
+>   the file hasn't changed since the last add.
+> - Runs `hledger` and standard coreutils (`stat`, `truncate`, `mktemp`)
+>   via bash.
+> - **Does not** access the network, run background daemons, or execute
+>   anything outside the commands listed above.
+>
+> You can audit the complete source — it's three QML files with embedded bash
+> scripts, no build step, no dependencies beyond hledger.
+
+## Project structure
+
+```
+afonsoneto.omarchledger/
+├── manifest.json        # Plugin manifest (schemaVersion 1)
+├── BarWidget.qml        # Bar button entry point
+├── Panel.qml            # Popup UI — 3 tabs, form, autocomplete, auto-balance
+├── HledgerService.qml   # All hledger process invocation and output parsing
+├── LICENSE              # MIT
+├── README.md            # This file
+├── preview.png          # Hero screenshot
+├── preview-add.png      # Add tab screenshot
+├── preview-balance.png  # Balance tab screenshot
+└── preview-summary.png  # Summary tab screenshot
+```
+
+## Contributing
+
+Contributions are welcome! To work on the plugin locally:
+
+1. **Clone it into Omarchy's plugin directory:**
+
+   ```bash
+   git clone https://github.com/afonsoneto/omarchledger.git \
+     ~/.config/omarchy/plugins/afonsoneto.omarchledger
+   omarchy plugin enable afonsoneto.omarchledger
+   ```
+
+2. **Edit the QML files** — the plugin is three files with no build step.
+
+3. **Reload after changes:**
+
+   ```bash
+   omarchy restart shell
+   ```
+
+4. **Validate the manifest:**
+
+   ```bash
+   omarchy plugin validate ~/.config/omarchy/plugins/afonsoneto.omarchledger
+   ```
+
+5. **Test via IPC:**
+
+   ```bash
+   omarchy-shell shell summon afonsoneto.omarchledger '{}'   # open
+   omarchy-shell shell hide afonsoneto.omarchledger          # close
+   ```
+
+Please open an issue before starting large changes so we can discuss the
+approach.
+
+## Known limitations
+
+- **Multi-commodity balancing** sums all amounts regardless of commodity. This
+  works well for typical bank/expense pairs but a per-commodity balance matrix
+  would be more precise for complex mixed-currency postings.
+- **Date field** accepts any string hledger can parse — no date picker yet.
+- **Undo** is single-level (per add) and disabled if the file changed — by
+  design.
+- The **settings UI** for `hledgerBin` / `journalFile` is not yet exposed in
+  Omarchy's graphical settings panel; edit `shell.json` directly for now.
+
+## Roadmap
+
+These are ideas under consideration — feedback and contributions welcome:
+
+- [ ] Net-worth readout on the bar button
+- [ ] `hledger aregister` (account register) tab
+- [ ] Date picker / smart date input
+- [ ] Graphical settings panel integration
+- [ ] Multi-currency-aware auto-balancing
+
+## Marketplace submission
+
+To submit this plugin to the
+[Omarchy Plugin Marketplace](https://plugins.omarchy.org/), open the
+[submit-plugin issue form](https://github.com/omacom/omarchy-plugin-marketplace/issues/new?template=submit-plugin.yml)
+with:
+
+- **Repository URL:** `https://github.com/afonsoneto/omarchledger.git`
+- **Category:** Finance
+- **Tags:** hledger, ledger, accounting, plain-text accounting, finance
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) — © 2026 Afonso Neto
