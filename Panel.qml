@@ -276,8 +276,9 @@ Panel {
     var lastComma = digits.lastIndexOf(",")
     var lastDot = digits.lastIndexOf(".")
     if (lastComma !== -1 && lastDot !== -1) {
-      // Both separators present: the rightmost one is the decimal mark.
-      if (lastComma > lastDot) digits = digits.slice(0, lastComma).replace(/,/g, "")
+      // Both separators present: the rightmost one is the decimal mark,
+      // the other one is the thousands separator and must be stripped.
+      if (lastComma > lastDot) digits = digits.slice(0, lastComma).replace(/\./g, "")
         + "." + digits.slice(lastComma + 1)
       else digits = digits.replace(/,/g, "")
     } else if (lastComma !== -1) {
