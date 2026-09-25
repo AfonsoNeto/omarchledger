@@ -516,6 +516,7 @@ Panel {
           width: parent.width
           visible: service.resolveError === ""
           text: service.resolved ? ("📄 " + (service.journalFile.indexOf("/home/") === 0 ? service.journalFile.replace(/^\/home\/[^/]+/, "~") : service.journalFile)) : "Resolving journal…"
+          textFormat: Text.PlainText
           color: root.mutedForeground
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.caption
@@ -525,6 +526,7 @@ Panel {
           width: parent.width
           visible: service.resolveError !== ""
           text: service.resolveError
+          textFormat: Text.PlainText
           color: Color.urgent
           font.family: root.contentFontFamily
           font.pixelSize: Style.font.caption
@@ -554,6 +556,7 @@ Panel {
               Text {
                 anchors.centerIn: parent
                 text: modelData
+                textFormat: Text.PlainText
                 color: root.currentTab === index
                   ? Color.background
                   : tabMouse.containsMouse
@@ -607,6 +610,7 @@ Panel {
               anchors.rightMargin: Style.space(6)
               anchors.verticalCenter: parent.verticalCenter
               text: "Prefilled from " + service.similarDate + " — " + service.similarDescription
+              textFormat: Text.PlainText
               color: root.contentForeground
               font.family: root.contentFontFamily
               font.pixelSize: Style.font.caption
@@ -1072,6 +1076,7 @@ Panel {
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width - Style.space(16)
                     text: modelData
+                    textFormat: Text.PlainText
                     color: root.suggestIndex === index || suggestMouse.containsMouse
                       ? Color.accent : root.contentForeground
                     font.family: root.suggestTarget === -1
@@ -1169,6 +1174,7 @@ Panel {
             Text {
               width: parent.width - undoBtn.width - Style.space(8)
               text: service.addMessage
+              textFormat: Text.PlainText
               color: service.addOk ? Color.accent : Color.urgent
               font.family: root.contentFontFamily
               font.pixelSize: Style.font.caption
@@ -1227,6 +1233,7 @@ Panel {
               anchors.left: parent.left
               anchors.verticalCenter: parent.verticalCenter
               text: service.bsReportDate !== "" ? ("Balance Sheet — " + service.bsReportDate) : "Balance Sheet"
+              textFormat: Text.PlainText
               color: root.contentForeground
               font.family: root.contentFontFamily
               font.pixelSize: Style.font.bodySmall
@@ -1268,6 +1275,7 @@ Panel {
             width: parent.width
             visible: service.bsError !== ""
             text: service.bsError
+            textFormat: Text.PlainText
             color: Color.urgent
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
@@ -1330,6 +1338,7 @@ Panel {
                       anchors.leftMargin: Style.space(10)
                       anchors.verticalCenter: parent.verticalCenter
                       text: modelData.name.toUpperCase()
+                      textFormat: Text.PlainText
                       color: modelData.name === "Net" ? Color.accent : root.contentForeground
                       font.family: root.contentFontFamily
                       font.pixelSize: Style.font.caption
@@ -1343,6 +1352,7 @@ Panel {
                       anchors.rightMargin: Style.space(10)
                       anchors.verticalCenter: parent.verticalCenter
                       text: modelData.total
+                      textFormat: Text.PlainText
                       color: Color.accent
                       font.family: root.monoFontFamily
                       font.pixelSize: Style.font.body
@@ -1371,6 +1381,7 @@ Panel {
                         anchors.leftMargin: Style.space(10)
                         anchors.verticalCenter: parent.verticalCenter
                         text: modelData.account
+                        textFormat: Text.PlainText
                         color: root.contentForeground
                         font.family: root.monoFontFamily
                         font.pixelSize: Style.font.bodySmall
@@ -1383,6 +1394,7 @@ Panel {
                         anchors.rightMargin: Style.space(10)
                         anchors.verticalCenter: parent.verticalCenter
                         text: modelData.balance
+                        textFormat: Text.PlainText
                         color: modelData.isNegative ? Color.urgent : root.contentForeground
                         font.family: root.monoFontFamily
                         font.pixelSize: Style.font.bodySmall
@@ -1422,6 +1434,7 @@ Panel {
                       anchors.rightMargin: Style.space(10)
                       anchors.verticalCenter: parent.verticalCenter
                       text: modelData.total
+                      textFormat: Text.PlainText
                       color: modelData.isNegative ? Color.urgent : root.contentForeground
                       font.family: root.monoFontFamily
                       font.pixelSize: Style.font.bodySmall
@@ -1494,6 +1507,7 @@ Panel {
             width: parent.width
             visible: service.statsError !== ""
             text: service.statsError
+            textFormat: Text.PlainText
             color: Color.urgent
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.caption
@@ -1543,6 +1557,7 @@ Panel {
                   anchors.leftMargin: Style.space(10)
                   anchors.verticalCenter: parent.verticalCenter
                   text: modelData.key
+                  textFormat: Text.PlainText
                   color: root.isStale(modelData.key, modelData.value) ? Color.urgent : root.mutedForeground
                   font.family: root.contentFontFamily
                   font.pixelSize: Style.font.bodySmall
@@ -1556,6 +1571,7 @@ Panel {
                   anchors.rightMargin: Style.space(10)
                   anchors.verticalCenter: parent.verticalCenter
                   text: modelData.value
+                  textFormat: Text.PlainText
                   color: root.isStale(modelData.key, modelData.value) ? Color.urgent : root.contentForeground
                   font.family: root.monoFontFamily
                   font.pixelSize: Style.font.bodySmall
