@@ -190,15 +190,28 @@ Item {
       echo "omarchledger: cannot access the journal directory" >&2
       exit 5
     fi
-    TMP="$JDIR/.omarchledger-check.$$.tmp"
+    TMP=""
+    cleanup() { [ -n "$TMP" ] && rm -f -- "$TMP"; }
+    trap cleanup EXIT INT TERM HUP
+    ORIG_UMASK="$(umask)"
+    umask 077
+    TMP="$(mktemp -p "$JDIR" .omarchledger-check.XXXXXXXXXX.tmp 2>/dev/null)"
+    umask "$ORIG_UMASK"
+    if [ -z "$TMP" ] || [ ! -f "$TMP" ] || [ -L "$TMP" ] || [ ! -O "$TMP" ]; then
+      cleanup
+      echo "omarchledger: cannot create secure temporary validation file" >&2
+      exit 5
+    fi
     if ! cat "$HLF" > "$TMP" 2>/dev/null; then
+      cleanup
       echo "omarchledger: cannot read the journal file" >&2
       exit 5
     fi
     printf "%s" "$ENTRY" >> "$TMP"
     CHECK="$(cd "$JDIR" && "$HL" -f "$TMP" check 2>&1)"
     RC=$?
-    rm -f "$TMP"
+    cleanup
+    trap - EXIT INT TERM HUP
     if [ $RC -ne 0 ]; then
       printf "%s\n" "$CHECK" >&2
       exit 1
