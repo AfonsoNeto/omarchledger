@@ -14,7 +14,10 @@ import { Suite, assert, eq } from './harness.mjs'
 
 const SHIPPED_TEXT_FILES = [
   'manifest.json', 'README.md', 'LICENSE', 'Panel.qml',
-  'HledgerService.qml', 'BarWidget.qml'
+  'HledgerService.qml', 'BarWidget.qml', 'tests/README.md',
+  'tests/unit.test.mjs', 'tests/scripts.test.mjs',
+  'tests/static.test.mjs', 'tests/extract.mjs', 'tests/harness.mjs',
+  'tests/run.mjs'
 ]
 
 /* Strings from the author's real setup that must never ship again. */
@@ -67,6 +70,8 @@ export async function run(s) {
   await s.test('privacy: no real account/description strings in shipped files', () => {
     for (const f of SHIPPED_TEXT_FILES) {
       const content = readFileSync(path.join(ROOT, f), 'utf8')
+        // the blacklist definition itself necessarily contains the words
+        .replace(/^const PRIVACY_BLACKLIST = .*$/m, '')
       const m = content.match(PRIVACY_BLACKLIST)
       assert(!m, `${f} contains private string: ${m && m[0]}`)
     }

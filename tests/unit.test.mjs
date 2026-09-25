@@ -83,7 +83,7 @@ export async function run(s) {
 
   /* ---------------- regexEscape ---------------- */
   await s.test('regexEscape: metacharacters escaped', () => {
-    eq(service.regexEscape("Tesco (Main)"), "Tesco \\(Main\\)")
+    eq(service.regexEscape("Supermarket (Main)"), "Supermarket \\(Main\\)")
     eq(service.regexEscape("A.B*C"), "A\\.B\\*C")
     eq(service.regexEscape("a|b$c?d[e]f(g)h\\i"), "a\\|b\\$c\\?d\\[e\\]f\\(g\\)h\\\\i")
   })
@@ -115,7 +115,7 @@ export async function run(s) {
 
   /* ---------------- balancingAmountFor ---------------- */
   const bal = (amounts, i) => panel.balancingAmountFor(amounts, i)
-  await s.test('balancing: the Asda scenario (edit row 0 rebalances row 1)', () => {
+  await s.test('balancing: the supermarket prefill scenario (edit row 0 rebalances row 1)', () => {
     eq(bal(["£-15.94", "£30.14", "£-0.86", "£0.86"], 0), "£15.94")
   })
   await s.test('balancing: editing a middle row rebalances the next', () => {
