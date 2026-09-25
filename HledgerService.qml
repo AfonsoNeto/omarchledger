@@ -408,9 +408,9 @@ Item {
   /*
     Parse `hledger print` output (journal format) and return the LAST
     transaction found — the most recent one matching the query:
-      2026-08-12 * Tesco ; optional comment
+      2026-08-12 * Supermarket
           expenses:groceries          £23.45
-          assets:banks:monzo:personal
+          assets:bank:checking
     The final posting may carry no amount (auto-balanced).
   */
   function parsePrint(text) {
