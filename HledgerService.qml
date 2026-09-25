@@ -315,15 +315,27 @@ Item {
 
   /* ---- entry building ---------------------------------------------------- */
 
+  /*
+    Journal lines are the injection boundary: a CR/LF inside any field would
+    let pasted or prefilled content forge additional postings or whole
+    transactions (hledger would happily balance-check them). Line separators
+    can reach a single-line TextInput via clipboard paste, so every field is
+    flattened here — the one choke point all journal writes pass through.
+  */
+  function flattenLine(s) {
+    return String(s === undefined || s === null ? "" : s)
+      .replace(/[\r\n\u2028\u2029]+/g, " ")
+  }
+
   function buildEntry(date, description, comment, postings) {
-    var entry = "\n" + date + " " + description
-    var c = (comment || "").trim()
+    var entry = "\n" + flattenLine(date) + " " + flattenLine(description)
+    var c = flattenLine(comment).trim()
     if (c !== "") entry += "  ; " + c
     entry += "\n"
     for (var i = 0; i < postings.length; i++) {
       var p = postings[i]
-      var line = "    " + p.account
-      var a = (p.amount || "").trim()
+      var line = "    " + flattenLine(p.account)
+      var a = flattenLine(p.amount).trim()
       if (a !== "") line += "  " + a
       entry += line + "\n"
     }
