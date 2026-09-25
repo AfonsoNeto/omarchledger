@@ -263,20 +263,34 @@ Panel {
     Parse a simple amount like "£-15.94", "-15.94", "£30", "R$-6.16".
     Returns {commodity, value, decimals} or null when the text is empty or
     not a plain single-commodity amount (cost/lot expressions etc.).
+    Thousands separators are handled for both conventions ("1,000.00" and
+    "1.000,00"); a lone separator followed by 1-2 digits is treated as the
+    decimal separator, otherwise as a thousands separator.
   */
   function parseSimpleAmount(text) {
     var s = (text || "").trim()
     if (s === "") return null
     var m = s.match(/^([^\d\s.+-]+)?\s*([-+]?[0-9](?:[0-9.,]*[0-9])?)$/)
     if (m === null) return null
-    var normalized = m[2].replace(",", ".")
-    var value = parseFloat(normalized)
+    var digits = m[2]
+    var lastComma = digits.lastIndexOf(",")
+    var lastDot = digits.lastIndexOf(".")
+    if (lastComma !== -1 && lastDot !== -1) {
+      // Both separators present: the rightmost one is the decimal mark.
+      if (lastComma > lastDot) digits = digits.replace(/\./g, "").replace(",", ".")
+      else digits = digits.replace(/,/g, "")
+    } else if (lastComma !== -1) {
+      var after = digits.length - lastComma - 1
+      if (after <= 2) digits = digits.replace(",", ".")
+      else digits = digits.replace(/,/g, "")
+    }
+    var value = parseFloat(digits)
     if (isNaN(value)) return null
-    var dot = normalized.indexOf(".")
+    var dot = digits.indexOf(".")
     return {
       commodity: m[1] || "",
       value: value,
-      decimals: dot === -1 ? 0 : normalized.length - dot - 1
+      decimals: dot === -1 ? 0 : digits.length - dot - 1
     }
   }
 

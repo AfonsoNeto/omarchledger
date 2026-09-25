@@ -112,6 +112,26 @@ export async function run(s) {
     eq(panel.parseSimpleAmount("£-15,94").value, -15.94)
     eq(panel.parseSimpleAmount("+5").value, 5)
   })
+  await s.test('parseSimpleAmount: thousands separators, both conventions', () => {
+    const a = panel.parseSimpleAmount("£1,000.00")
+    eq(a.value, 1000); eq(a.decimals, 2)
+    const b = panel.parseSimpleAmount("£-1,000.00")
+    eq(b.value, -1000); eq(b.decimals, 2)
+    const c = panel.parseSimpleAmount("£1.000,00")
+    eq(c.value, 1000); eq(c.decimals, 2)
+    const d = panel.parseSimpleAmount("£1,250,000.75")
+    eq(d.value, 1250000.75); eq(d.decimals, 2)
+  })
+  await s.test('parseSimpleAmount: lone comma is decimal for 1-2 digits, thousands otherwise', () => {
+    eq(panel.parseSimpleAmount("£1,00").value, 1)
+    eq(panel.parseSimpleAmount("£1,00").decimals, 2)
+    eq(panel.parseSimpleAmount("£1,5").value, 1.5)
+    eq(panel.parseSimpleAmount("£1,000").value, 1000)
+    eq(panel.parseSimpleAmount("£1,000").decimals, 0)
+  })
+  await s.test('balancing: rebalance from a thousands-formatted entry', () => {
+    eq(panel.balancingAmountFor(["£-1,000.00", "£30.14", "£-0.86", "£0.86"], 0), "£1000.00")
+  })
 
   /* ---------------- balancingAmountFor ---------------- */
   const bal = (amounts, i) => panel.balancingAmountFor(amounts, i)
