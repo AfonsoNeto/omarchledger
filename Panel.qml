@@ -40,6 +40,17 @@ Panel {
   function applySettings() {
     service.hledgerBinOverride = root.setting("hledgerBin", "")
     service.journalFileOverride = root.setting("journalFile", "")
+    // A changed override invalidates everything tied to the previously
+    // resolved binary/journal — most importantly the UNDO fingerprint and
+    // sizes, which belong to the old file and must never be applied to a
+    // different one.
+    if (service.resolved && (service.hledgerBinOverride !== service.resolvedBinOverride
+        || service.journalFileOverride !== service.resolvedJournalOverride)) {
+      service.resetResolution()
+      if (root.opened) service.resolve()
+    }
+    service.resolvedBinOverride = service.hledgerBinOverride
+    service.resolvedJournalOverride = service.journalFileOverride
   }
   onSettingsChanged: applySettings()
   Component.onCompleted: applySettings()

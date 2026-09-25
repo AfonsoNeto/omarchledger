@@ -36,6 +36,37 @@ Item {
   property string hledgerBin: ""
   property string journalFile: ""
   property string resolveError: ""
+  // Overrides as they were when the current resolution ran, so Panel can
+  // detect a settings change that invalidates it.
+  property string resolvedBinOverride: ""
+  property string resolvedJournalOverride: ""
+
+  /*
+    Drop everything tied to the current resolution — data caches and,
+    critically, the add/undo state: its sizes and entry fingerprint belong
+    to the journal that was resolved when the transaction was added and
+    must never be carried over to a different file.
+  */
+  function resetResolution() {
+    root.resolved = false
+    root.resolveError = ""
+    root.hledgerBin = ""
+    root.journalFile = ""
+    root.accountList = []
+    root.descriptionList = []
+    root.commodityList = []
+    root.bsSections = []
+    root.bsReportDate = ""
+    root.statsEntries = []
+    root.busyAccounts = false
+    root.busyBs = false
+    root.busyStats = false
+    root.busyAdd = false
+    root.canUndo = false
+    root.preAddSize = -1
+    root.postAddSize = -1
+    root.entrySha256 = ""
+  }
 
   /* ---- data stores ------------------------------------------------------ */
   property var accountList: []
