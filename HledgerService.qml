@@ -61,6 +61,7 @@ Item {
   property bool addOk: false
   property int preAddSize: -1
   property int postAddSize: -1
+  property string entrySha256: ""
   property bool canUndo: false
 
   /* ---- busy flags ------------------------------------------------------- */
@@ -240,14 +241,15 @@ Item {
       exit 5
     fi
     NEWSIZE="$(stat -L -c %s "$HLF" 2>/dev/null)"
-    echo "APPENDED:$SIZE:$NEWSIZE"
+    ESHA="$(printf "%s" "$ENTRY" | sha256sum | cut -d" " -f1)"
+    echo "APPENDED:$SIZE:$NEWSIZE:$ESHA"
   '
 
   function undoLastAdd() {
     if (!root.canUndo || root.busyAdd) return
     root.busyAdd = true
     undoProc.command = ["bash", "-c", undoScript, "omarchledger", root.journalFile,
-      String(root.preAddSize), String(root.postAddSize)]
+      String(root.preAddSize), String(root.postAddSize), root.entrySha256]
     undoProc.running = true
   }
 
@@ -255,6 +257,7 @@ Item {
     HLF="$1"
     PRESIZE="$2"
     POSTSIZE="$3"
+    ESHA="$4"
     CUR="$(stat -L -c %s "$HLF" 2>/dev/null)"
     if [ -z "$CUR" ]; then
       echo "omarchledger: cannot read the journal file" >&2
@@ -262,6 +265,32 @@ Item {
     fi
     if [ "$CUR" != "$POSTSIZE" ]; then
       echo "omarchledger: the journal changed since the transaction was added; refusing to undo" >&2
+      exit 1
+    fi
+    # The tail must be exactly what this plugin appended; a same-size edit
+    # or a concurrent writer must never be truncated away.
+    if [ -z "$ESHA" ]; then
+      echo "omarchledger: no transaction fingerprint recorded; refusing to undo" >&2
+      exit 1
+    fi
+    TMP=""
+    cleanup() { [ -n "$TMP" ] && rm -f -- "$TMP"; }
+    trap cleanup EXIT INT TERM HUP
+    ORIG_UMASK="$(umask)"
+    umask 077
+    TMP="$(mktemp -p "$(dirname "$HLF")" .omarchledger-undo.XXXXXXXXXX.tmp 2>/dev/null)"
+    umask "$ORIG_UMASK"
+    if [ -z "$TMP" ]; then
+      echo "omarchledger: cannot create a secure temporary file" >&2
+      exit 5
+    fi
+    TLEN=$((POSTSIZE - PRESIZE))
+    tail -c "$TLEN" "$HLF" > "$TMP" 2>/dev/null
+    TSHA="$(sha256sum "$TMP" | cut -d" " -f1)"
+    cleanup
+    trap - EXIT INT TERM HUP
+    if [ "$TSHA" != "$ESHA" ]; then
+      echo "omarchledger: the journal tail does not match the added transaction; refusing to undo" >&2
       exit 1
     fi
     if ! truncate -s "$PRESIZE" "$HLF" 2>/dev/null; then
@@ -568,8 +597,10 @@ Item {
             var parts = lines[i].substring(9).split(":")
             root.preAddSize = parseInt(parts[0], 10)
             root.postAddSize = parts.length > 1 ? parseInt(parts[1], 10) : -1
+            root.entrySha256 = parts.length > 2 ? parts[2] : ""
             root.canUndo = !isNaN(root.preAddSize) && root.preAddSize >= 0
               && !isNaN(root.postAddSize) && root.postAddSize >= 0
+              && root.entrySha256 !== ""
           }
         }
       }
@@ -609,6 +640,7 @@ Item {
         root.canUndo = false
         root.preAddSize = -1
         root.postAddSize = -1
+        root.entrySha256 = ""
         root.addOk = true
         root.addMessage = "Transaction removed."
       }
