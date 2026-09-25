@@ -129,6 +129,15 @@ export async function run(s) {
     eq(panel.parseSimpleAmount("£1,000").value, 1000)
     eq(panel.parseSimpleAmount("£1,000").decimals, 0)
   })
+  await s.test('parseSimpleAmount: multi-comma decimal groups stay intact (typing intermediates)', () => {
+    // per-keystroke intermediates of "£-1,250,000.75"
+    const a = panel.parseSimpleAmount("£-1,250,0")
+    eq(a.value, -1250); eq(a.decimals, 1)
+    const b = panel.parseSimpleAmount("£-1,250,00")
+    eq(b.value, -1250); eq(b.decimals, 2)
+    const c = panel.parseSimpleAmount("£1,250,00")
+    eq(c.value, 1250); eq(c.decimals, 2)
+  })
   await s.test('balancing: rebalance from a thousands-formatted entry', () => {
     eq(panel.balancingAmountFor(["£-1,000.00", "£30.14", "£-0.86", "£0.86"], 0), "£1000.00")
   })
