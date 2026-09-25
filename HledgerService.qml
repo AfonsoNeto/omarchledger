@@ -106,6 +106,9 @@ Item {
       JF="$("$BIN" files 2>/dev/null | head -n 1)"
     fi
     if [ -z "$JF" ]; then echo "ERR:no-journal"; exit 0; fi
+    # -f follows symlinks and only accepts regular files: a FIFO or device
+    # node would hang or misbehave in the later read/write helpers.
+    if [ ! -f "$JF" ]; then echo "ERR:journal-unreadable"; exit 0; fi
     echo "JF:$JF"
   '
 
@@ -114,6 +117,8 @@ Item {
       return "hledger was not found on PATH. Install it (e.g. your package manager, hledger.org, or via mise) or set the \"hledgerBin\" option on the Omarchledger bar widget."
     if (code === "no-journal")
       return "No journal file found. Set LEDGER_FILE, create ~/.hledger.journal, or set the \"journalFile\" option on the Omarchledger bar widget."
+    if (code === "journal-unreadable")
+      return "The journal file was not found or is not a regular file. Check the \"journalFile\" option on the Omarchledger bar widget or your hledger configuration."
     return code
   }
 
@@ -208,6 +213,10 @@ Item {
       echo "omarchledger: cannot access the journal directory" >&2
       exit 5
     fi
+    if [ ! -f "$HLF" ]; then
+      echo "omarchledger: journal is not a regular file; refusing to write" >&2
+      exit 5
+    fi
     TMP=""
     cleanup() { [ -n "$TMP" ] && rm -f -- "$TMP"; }
     trap cleanup EXIT INT TERM HUP
@@ -258,6 +267,10 @@ Item {
     PRESIZE="$2"
     POSTSIZE="$3"
     ESHA="$4"
+    if [ ! -f "$HLF" ]; then
+      echo "omarchledger: journal is not a regular file; refusing to write" >&2
+      exit 5
+    fi
     CUR="$(stat -L -c %s "$HLF" 2>/dev/null)"
     if [ -z "$CUR" ]; then
       echo "omarchledger: cannot read the journal file" >&2
