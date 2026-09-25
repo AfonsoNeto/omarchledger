@@ -175,7 +175,7 @@ Item {
     // The query is piped over stdin (single line) — never placed on the
     // command line, where it would be readable by other local users.
     similarProc.command = ["bash", "-c",
-      'IFS= read -r QUERY\n"$1" -f "$2" print "$QUERY" 2>/dev/null',
+      'IFS= read -r QUERY\n[ -n "$QUERY" ] || exit 0\n"$1" -f "$2" print "$QUERY" 2>/dev/null',
       "omarchledger", root.hledgerBin, root.journalFile, "1"]
     similarProc.pendingQuery = query + "\n"
     similarProc.running = true
@@ -201,6 +201,11 @@ Item {
     HL="$1"
     HLF="$2"
     NLINES="$3"
+    case "$NLINES" in \'\'|*[!0-9]*|0)
+      echo "omarchledger: malformed entry size" >&2
+      exit 5
+    ;;
+    esac
     ENTRY=""
     i=0
     while [ "$i" -lt "$NLINES" ]; do
@@ -298,6 +303,11 @@ Item {
       exit 5
     fi
     TLEN=$((POSTSIZE - PRESIZE))
+    case "$TLEN" in \'\'|*[!0-9]*|0)
+      echo "omarchledger: the journal changed since the transaction was added; refusing to undo" >&2
+      exit 1
+    ;;
+    esac
     tail -c "$TLEN" "$HLF" > "$TMP" 2>/dev/null
     TSHA="$(sha256sum "$TMP" | cut -d" " -f1)"
     cleanup
