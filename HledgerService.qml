@@ -166,7 +166,12 @@ Item {
     // desc: matches as a regex; escape metacharacters so a plain description
     // behaves like a literal substring match.
     var query = "desc:" + regexEscape(d)
-    similarProc.command = ["bash", "-c", '"$1" -f "$2" print "$3" 2>/dev/null', "omarchledger", root.hledgerBin, root.journalFile, query]
+    // The query is piped over stdin (single line) — never placed on the
+    // command line, where it would be readable by other local users.
+    similarProc.command = ["bash", "-c",
+      'IFS= read -r QUERY\n"$1" -f "$2" print "$QUERY" 2>/dev/null',
+      "omarchledger", root.hledgerBin, root.journalFile, "1"]
+    similarProc.pendingQuery = query + "\n"
     similarProc.running = true
   }
 
@@ -177,14 +182,26 @@ Item {
     root.busyAdd = true
     root.addOk = false
     root.addMessage = ""
-    addProc.command = ["bash", "-c", addScript, "omarchledger", root.hledgerBin, root.journalFile, entryText]
+    // The entry is piped to the helper's stdin; argv only carries the number
+    // of lines to read. Journal entries hold financial data and must never
+    // appear on the command line (/proc/<pid>/cmdline is world-readable).
+    var lineCount = entryText.split("\n").length - 1
+    addProc.pendingEntry = entryText
+    addProc.command = ["bash", "-c", addScript, "omarchledger", root.hledgerBin, root.journalFile, String(lineCount)]
     addProc.running = true
   }
 
   property string addScript: '
     HL="$1"
     HLF="$2"
-    ENTRY="$3"
+    NLINES="$3"
+    ENTRY=""
+    i=0
+    while [ "$i" -lt "$NLINES" ]; do
+      IFS= read -r LINE
+      printf -v ENTRY "%s%s\\n" "$ENTRY" "$LINE"
+      i=$((i + 1))
+    done
     JDIR="$(cd "$(dirname "$HLF")" 2>/dev/null && pwd)"
     if [ -z "$JDIR" ]; then
       echo "omarchledger: cannot access the journal directory" >&2
@@ -514,6 +531,9 @@ Item {
 
   Process {
     id: similarProc
+    stdinEnabled: true
+    property string pendingQuery: ""
+    onStarted: similarProc.write(similarProc.pendingQuery)
 
     stdout: StdioCollector {
       waitForEnd: true
@@ -535,6 +555,9 @@ Item {
 
   Process {
     id: addProc
+    stdinEnabled: true
+    property string pendingEntry: ""
+    onStarted: addProc.write(addProc.pendingEntry)
 
     stdout: StdioCollector {
       waitForEnd: true

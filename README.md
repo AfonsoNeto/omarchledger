@@ -135,6 +135,11 @@ This plugin takes journal integrity seriously:
    **refuses to run** if the file has changed in the meantime — it can never
    clobber later edits.
 4. Temporary files are always cleaned up, even on failure.
+5. Transaction data **never appears on a command line**. The entry is piped
+   to the helper script's stdin (only a line count travels as an argument),
+   so it can't leak through `/proc/<pid>/cmdline`, which is readable by other
+   local users. Validation temp files are created with `mktemp` under a
+   restrictive `umask` (0600).
 
 ## Security & permissions
 
@@ -148,7 +153,8 @@ This plugin takes journal integrity seriously:
 > - **Truncates** the journal only when you explicitly press UNDO, and only if
 >   the file hasn't changed since the last add.
 > - Runs `hledger` and standard coreutils (`stat`, `truncate`, `mktemp`)
->   via bash.
+>   via bash. Journal content is passed to the helper over stdin, never as
+>   command-line arguments or environment variables.
 > - **Does not** access the network, run background daemons, or execute
 >   anything outside the commands listed above.
 >
