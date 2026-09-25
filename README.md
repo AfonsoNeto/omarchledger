@@ -175,11 +175,13 @@ afonsoneto.omarchledger/
 
 Contributions are welcome! To work on the plugin locally:
 
-1. **Clone it into Omarchy's plugin directory:**
+1. **Set up the repository in Omarchy's plugin directory:**
+
+   Fork the repository on GitHub and clone your fork into the plugins directory:
 
    ```bash
-   git clone https://github.com/AfonsoNeto/omarchledger.git \
-     ~/.config/omarchy/plugins/afonsoneto.omarchledger
+   # Clone your fork into ~/.config/omarchy/plugins/afonsoneto.omarchledger, then:
+   cd ~/.config/omarchy/plugins/afonsoneto.omarchledger
    omarchy plugin enable afonsoneto.omarchledger
    ```
 
