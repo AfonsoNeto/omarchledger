@@ -390,7 +390,10 @@ Item {
   }
 
   function isNegativeAmount(s) {
-    return /-[0-9]/.test(s || "")
+    var str = String(s || "").trim()
+    // hledger prints the minus either before the digits (£-69.00) or before
+    // the commodity (-£69.00), depending on the journal's amount style.
+    return str.indexOf("-") === 0 || /-[0-9]/.test(str)
   }
 
   /*
