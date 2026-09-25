@@ -174,7 +174,8 @@ afonsoneto.omarchledger/
 ├── preview.png          # Hero screenshot
 ├── preview-add.png      # Add tab screenshot
 ├── preview-balance.png  # Balance tab screenshot
-└── preview-summary.png  # Summary tab screenshot
+├── preview-summary.png  # Summary tab screenshot
+└── tests/               # Automated test suite (node tests/run.mjs)
 ```
 
 ## Contributing
@@ -199,13 +200,24 @@ Contributions are welcome! To work on the plugin locally:
    omarchy restart shell
    ```
 
-4. **Validate the manifest:**
+4. **Run the test suite:**
+
+   ```bash
+   node tests/run.mjs
+   ```
+
+   80+ tests cover the entry-building/injection guards, parsers,
+   auto-balancing, and the validate-before-append/undo bash helpers against
+   throwaway journals. Tests extract the shipped QML code verbatim and never
+   touch your real journal. See `tests/README.md`.
+
+5. **Validate the manifest:**
 
    ```bash
    omarchy plugin validate ~/.config/omarchy/plugins/afonsoneto.omarchledger
    ```
 
-5. **Test via IPC:**
+6. **Test via IPC:**
 
    ```bash
    omarchy-shell shell summon afonsoneto.omarchledger '{}'   # open

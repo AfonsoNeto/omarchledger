@@ -33,6 +33,17 @@ export function unescapeQml(raw) {
   return raw.replace(/\\(.)/g, (_, c) => c)
 }
 
+/* Unescape a QML DOUBLE-quoted string body (JS-style escapes; quote
+   characters may appear bare because the QML literal uses single quotes). */
+export function unescapeQmlDoubleQuoted(raw) {
+  return raw.replace(/\\(.)/g, (_, c) => {
+    if (c === 'n') return "\n"
+    if (c === 't') return "\t"
+    if (c === 'r') return "\r"
+    return c
+  })
+}
+
 function extractAndUnescape(source, kind, name, file) {
   let re
   if (kind === 'script')
@@ -56,6 +67,10 @@ export function loadFunctions(file, names) {
     const code = extractAndUnescape(source, 'function', name, file)
     vm.runInContext(code, ctx, { filename: `${path.basename(file)}#${name}` })
   }
+  // In the real QML, functions are reachable as properties of the item
+  // (parseBsText calls root.isNegativeAmount); mirror that in the sandbox.
+  for (const name of names)
+    if (typeof ctx[name] === 'function') ctx.root[name] = ctx[name]
   return ctx
 }
 
@@ -74,5 +89,5 @@ export function extractSimilarCommand() {
   const m = serviceSource().match(
     /similarProc\.command = \["bash", "-c",\s*\n\s*'((?:[^'\\]|\\.)*)'/)
   if (!m) throw new Error('cannot extract similarProc.command from HledgerService.qml')
-  return unescapeQml(m[1])
+  return unescapeQmlDoubleQuoted(m[1])
 }

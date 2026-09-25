@@ -231,7 +231,7 @@ export async function run(s) {
   ].join("\n")
   await s.test('parseStatsText: key/value extraction', () => {
     const st = service.parseStatsText(STATS_FIXTURE)
-    eq(st.length, 5)
+    eq(st.length, 6)
     eq(st[0].key, "Main file")
     eq(st[0].value, "~/ledger.journal")
     assert(st.some(e => e.key === "Txns" && e.value === "477 (3.4 per day)"))

@@ -10,7 +10,7 @@
   user's real journal is never touched.
 */
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, readFileSync, statSync, existsSync, rmSync, readdirSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, readFileSync, statSync, existsSync, rmSync, readdirSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import crypto from 'node:crypto'
@@ -73,10 +73,12 @@ export async function run(s) {
     /* ---------- resolveScript: plumbing with a stub binary ---------- */
     const stubBin = path.join(root, 'stub-hledger')
     writeFileSync(stubBin, '#!/bin/sh\nif [ "$1" = files ]; then cat "$STUB_FILES" 2>/dev/null; fi\n')
+    chmodSync(stubBin, 0o755)
     const filesList = path.join(root, 'files.txt')
 
     await s.test('resolve: override binary wins and its files output is used', async () => {
-      writeFileSync(filesList, path.join(root, 'fake.journal') + "\n")
+      const fakeJournal = writeFile(root, 'fake.journal', "2026-01-01 t\n    a  1\n    b\n")
+      writeFileSync(filesList, fakeJournal + "\n")
       const r = runScript(resolve, [stubBin, ""], "", { ...cleanEnv(), STUB_FILES: filesList })
       eq(r.code, 0)
       matches(r.stdout, /^BIN:/m)
@@ -126,7 +128,7 @@ export async function run(s) {
       symlinkSync(real, path.join(dir, 'link.journal'))
       writeFileSync(filesList, path.join(dir, 'link.journal') + "\n")
       const r = runScript(resolve, [stubBin, ""], "", { ...cleanEnv(), STUB_FILES: filesList })
-      matches(r.stdout, new RegExp("^JF:" + real + "$", "m"))
+      matches(r.stdout, new RegExp("^JF:" + path.join(dir, "link.journal") + "$", "m"))
     })
 
     await s.test('resolve: real hledger honors LEDGER_FILE', async () => {
@@ -149,6 +151,7 @@ export async function run(s) {
     const similarSh = writeFile(scripts, 'similar.sh', similar + "\n")
     const stubEcho = path.join(root, 'stub-echo')
     writeFileSync(stubEcho, '#!/bin/sh\nprintf \'CALLED:%s|%s\\n\' "$2" "$4"\n')
+    chmodSync(stubEcho, 0o755)
 
     await s.test('similar: empty stdin query is a guarded no-op', async () => {
       const r = runScript(similarSh, [stubEcho, path.join(root, 'x.journal'), "1"], "")
@@ -157,7 +160,8 @@ export async function run(s) {
     })
     await s.test('similar: query travels via stdin to hledger print', async () => {
       const r = runScript(similarSh, [stubEcho, path.join(root, 'x.journal'), "1"], "desc:Supermarket\n")
-      matches(r.stdout, /CALLED:print\|desc:Supermarket/)
+      // stub argv: $1=-f $2=<journal> $3=print $4=<query from stdin>
+      matches(r.stdout, /CALLED:[^|]*\.journal\|desc:Supermarket/)
     })
 
     /* ---------- addScript: needs a real hledger ---------- */
@@ -209,14 +213,16 @@ export async function run(s) {
     await s.test('add: symlinked journal gets dereferenced sizes', async () => {
       if (!hasHledger) return s.skip('hledger not on PATH')
       const dir = path.join(root, 'add-symlink')
-      mkdirSync(dir, { recursive: true })
+      mkdirSync(dir)
+      mkdirSync(path.join(dir, '.real'))
       const real = writeFile(path.join(dir, '.real'), 'j.journal', "2026-01-01 Opening\n    assets:cash    100.00\n    incomes:salary\n")
+      const before = readFileSync(real)
       const link = path.join(dir, 'j.journal')
       symlinkSync(real, link)
       const r = runScript(add, ['hledger', link, String(ENTRY_LINES)], ENTRY)
       eq(r.code, 0, r.stderr)
       const a = parseAppended(r.stdout)
-      eq(a.pre, statSync(real).size, "size is of the target, not the symlink")
+      eq(a.pre, before.length, "size is of the target, not the symlink")
       const undoR = runScript(undo, [link, String(a.pre), String(a.post), a.sha])
       eq(undoR.code, 0, undoR.stderr)
       eq(readFileSync(real).toString(), "2026-01-01 Opening\n    assets:cash    100.00\n    incomes:salary\n")
@@ -256,7 +262,7 @@ export async function run(s) {
       for (let i = 0; i < 50; i++) lines.push("    expenses:cat" + i + "    1.00\n")
       lines.push("    assets:cash\n")
       entry = lines.join("")
-      const r = runScript(add, ['hledger', j, "52"], entry)
+      const r = runScript(add, ['hledger', j, "53"], entry)
       eq(r.code, 0, r.stderr)
       const a = parseAppended(r.stdout)
       eq(readFileSync(j).subarray(a.pre).toString('utf8'), entry)
@@ -359,7 +365,7 @@ export async function run(s) {
       const dir = path.join(root, 'undo-twice')
       mkdirSync(dir)
       const { j, a } = await addForUndo(dir)
-      eq(run(undo, [j, String(a.pre), String(a.post), a.sha]).code, 0)
+      eq(runScript(undo, [j, String(a.pre), String(a.post), a.sha]).code, 0)
       const r = runScript(undo, [j, String(a.pre), String(a.post), a.sha])
       eq(r.code, 1)
     })
