@@ -388,6 +388,35 @@ export async function run(s) {
       assert(readFileSync(j).includes("Script test"), "entry preserved")
     })
 
+    await s.test('undo: symlink retarget mid-flight cannot redirect the truncation', async () => {
+      if (!hasHledger) return s.skip('hledger not on PATH')
+      const dir = path.join(root, 'undo-retarget')
+      mkdirSync(dir)
+      const realA = writeFile(dir, 'a.journal', "2026-01-01 A\n    assets:cash    100.00\n    incomes:salary\n")
+      writeFile(dir, 'b.journal', "2026-02-02 B\n    assets:cash    200.00\n    incomes:salary\n")
+      const link = path.join(dir, 'j.journal')
+      symlinkSync(realA, link)
+      const r = runScript(add, ['hledger', link, String(ENTRY_LINES)], ENTRY)
+      eq(r.code, 0, r.stderr)
+      const a = parseAppended(r.stdout)
+      // Block the undo on the lock, then retarget the symlink while it
+      // waits: by the time the undo runs its checks, the path points to
+      // b.journal, but its fd is bound to the a.journal inode it opened.
+      const h = spawn('flock', [link, '-c', 'sleep 2'])
+      const proc = spawn('bash', [undo, link, String(a.pre), String(a.post), a.sha], { encoding: 'utf8' })
+      await new Promise(res => setTimeout(res, 500))
+      rmSync(link)
+      symlinkSync(path.join(dir, 'b.journal'), link)
+      const r2 = await new Promise(res => {
+        proc.on('close', (code) => res({ code, stdout: proc.stdout.read() || '', stderr: proc.stderr.read() || '' }))
+      })
+      h.kill()
+      eq(r2.code, 0, r2.stderr)
+      // the locked inode (a.journal) is restored, b.journal untouched
+      eq(readFileSync(realA).toString(), "2026-01-01 A\n    assets:cash    100.00\n    incomes:salary\n")
+      assert(readFileSync(path.join(dir, 'b.journal')).includes("2026-02-02 B"), "retargeted file untouched")
+    })
+
     await s.test('undo: double undo refused (second sees size mismatch)', async () => {
       if (!hasHledger) return s.skip('hledger not on PATH')
       const dir = path.join(root, 'undo-twice')
@@ -422,6 +451,7 @@ export async function run(s) {
       assert(script.includes('stat -L'), "sizes must dereference symlinks")
       assert(script.includes('mktemp'), "temp file must be mktemp")
       assert(script.includes('flock -w'), "append must hold the journal lock")
+      assert(!script.includes('>> "$HLF"'), "append must target the locked inode, not the path")
     })
     await s.test('static: undo script verifies content, not just size', () => {
       const script = extractScript('undoScript')
@@ -429,6 +459,7 @@ export async function run(s) {
       assert(script.includes('sha256sum'), "tail fingerprint check required")
       assert(script.includes('stat -L'))
       assert(script.includes('flock -w'), "undo must hold the journal lock")
+      assert(script.includes('/proc/self/fd/9'), "operations must target the locked inode")
     })
   } finally {
     rmSync(root, { recursive: true, force: true })

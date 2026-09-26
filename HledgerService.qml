@@ -283,18 +283,22 @@ Item {
     # (two monitors = two live panels): an undo truncating during this
     # append would otherwise interleave, and a concurrent append would be
     # captured into the recorded sizes.
-    exec 9<"$HLF" || { echo "omarchledger: cannot open the journal" >&2; exit 5; }
+    # Read-write fd: the append goes through /proc/self/fd/9, re-opening
+    # the LOCKED inode, so a symlink retarget between the size capture and
+    # the append can never redirect the write to a different file.
+    exec 9<>"$HLF" || { echo "omarchledger: cannot open the journal" >&2; exit 5; }
     if ! flock -w 3 9; then
       echo "omarchledger: the journal is busy; try again" >&2
       exit 1
     fi
-    SIZE="$(stat -L -c %s "$HLF" 2>/dev/null)"
+    JF="/proc/self/fd/9"
+    SIZE="$(stat -L -c %s "$JF" 2>/dev/null)"
     if [ -z "$SIZE" ]; then SIZE=0; fi
-    if ! printf "%s" "$ENTRY" >> "$HLF" 2>/dev/null; then
+    if ! printf "%s" "$ENTRY" >> "$JF" 2>/dev/null; then
       echo "omarchledger: cannot write to the journal file" >&2
       exit 5
     fi
-    NEWSIZE="$(stat -L -c %s "$HLF" 2>/dev/null)"
+    NEWSIZE="$(stat -L -c %s "$JF" 2>/dev/null)"
     ESHA="$(printf "%s" "$ENTRY" | sha256sum | cut -d" " -f1)"
     echo "APPENDED:$SIZE:$NEWSIZE:$ESHA"
   '
@@ -320,18 +324,28 @@ Item {
       echo "omarchledger: journal is not readable" >&2
       exit 5
     fi
+    if [ ! -w "$HLF" ]; then
+      echo "omarchledger: journal is not writable" >&2
+      exit 5
+    fi
     # Serialize against other plugin instances (the bar exists per screen,
     # so two panels can be live) and hold the lock across verify AND
     # truncate: an append that lands inside this window must never be
     # truncated away. Non-cooperative writers are still caught by the size
     # and tail checks; the final re-compare below narrows their window to
     # the last two syscalls.
-    exec 9<"$HLF" || { echo "omarchledger: cannot open the journal" >&2; exit 5; }
+    #
+    # The fd is opened read-write and every later operation goes through
+    # /proc/self/fd/9, which re-opens the LOCKED inode: a symlink retarget
+    # between the checks and the truncate can never redirect the mutation
+    # to a different file than the one that was verified.
+    exec 9<>"$HLF" || { echo "omarchledger: cannot open the journal" >&2; exit 5; }
     if ! flock -w 3 9; then
       echo "omarchledger: the journal is busy; try again" >&2
       exit 1
     fi
-    CUR="$(stat -L -c %s "$HLF" 2>/dev/null)"
+    JF="/proc/self/fd/9"
+    CUR="$(stat -L -c %s "$JF" 2>/dev/null)"
     if [ -z "$CUR" ]; then
       echo "omarchledger: cannot read the journal file" >&2
       exit 5
@@ -363,7 +377,7 @@ Item {
       exit 1
     ;;
     esac
-    tail -c "$TLEN" "$HLF" > "$TMP" 2>/dev/null
+    tail -c "$TLEN" "$JF" > "$TMP" 2>/dev/null
     TSHA="$(sha256sum "$TMP" | cut -d" " -f1)"
     cleanup
     trap - EXIT INT TERM HUP
@@ -374,12 +388,12 @@ Item {
     # Atomic-compare half: re-verify the size as the last step before
     # mutating, so an append racing between the checks and the truncate is
     # refused instead of being destroyed.
-    CUR2="$(stat -L -c %s "$HLF" 2>/dev/null)"
+    CUR2="$(stat -L -c %s "$JF" 2>/dev/null)"
     if [ "$CUR2" != "$POSTSIZE" ]; then
       echo "omarchledger: the journal changed while preparing the undo; refusing to undo" >&2
       exit 1
     fi
-    if ! truncate -s "$PRESIZE" "$HLF" 2>/dev/null; then
+    if ! truncate -s "$PRESIZE" "$JF" 2>/dev/null; then
       echo "omarchledger: cannot write to the journal file" >&2
       exit 5
     fi
