@@ -131,9 +131,10 @@ This plugin takes journal integrity seriously:
    On failure, hledger's error message is shown verbatim and nothing is
    written.
 3. The **UNDO** button records the journal's exact byte size before and after
-   the append. It truncates the journal back to its previous size and
-   **refuses to run** if the file has changed in the meantime — it can never
-   clobber later edits.
+   the append. It takes an exclusive lock on the journal, re-verifies the size
+   and a fingerprint of the appended bytes, and only then truncates back —
+   refusing (never clobbering) if anything else changed the file, including
+   a writer racing inside the undo itself.
 4. Temporary files are always cleaned up, even on failure.
 5. Transaction data **never appears on a command line**. The entry is piped
    to the helper script's stdin (only a line count travels as an argument),
@@ -152,8 +153,8 @@ This plugin takes journal integrity seriously:
 >   existing content).
 > - **Truncates** the journal only when you explicitly press UNDO, and only if
 >   the file hasn't changed since the last add.
-> - Runs `hledger` and standard coreutils (`stat`, `truncate`, `mktemp`)
->   via bash. Journal content is passed to the helper over stdin, never as
+> - Runs `hledger` and standard tools (`stat`, `truncate`, `mktemp`,
+>   `flock`) via bash. Journal content is passed to the helper over stdin, never as
 >   command-line arguments or environment variables.
 > - **Does not** access the network, run background daemons, or execute
 >   anything outside the commands listed above.

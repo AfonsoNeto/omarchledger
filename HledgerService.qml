@@ -307,6 +307,21 @@ Item {
       echo "omarchledger: journal is not a regular file; refusing to write" >&2
       exit 5
     fi
+    if [ ! -r "$HLF" ]; then
+      echo "omarchledger: journal is not readable" >&2
+      exit 5
+    fi
+    # Serialize against other plugin instances (the bar exists per screen,
+    # so two panels can be live) and hold the lock across verify AND
+    # truncate: an append that lands inside this window must never be
+    # truncated away. Non-cooperative writers are still caught by the size
+    # and tail checks; the final re-compare below narrows their window to
+    # the last two syscalls.
+    exec 9<"$HLF" || { echo "omarchledger: cannot open the journal" >&2; exit 5; }
+    if ! flock -w 3 9; then
+      echo "omarchledger: the journal is busy; try again" >&2
+      exit 1
+    fi
     CUR="$(stat -L -c %s "$HLF" 2>/dev/null)"
     if [ -z "$CUR" ]; then
       echo "omarchledger: cannot read the journal file" >&2
@@ -345,6 +360,14 @@ Item {
     trap - EXIT INT TERM HUP
     if [ "$TSHA" != "$ESHA" ]; then
       echo "omarchledger: the journal tail does not match the added transaction; refusing to undo" >&2
+      exit 1
+    fi
+    # Atomic-compare half: re-verify the size as the last step before
+    # mutating, so an append racing between the checks and the truncate is
+    # refused instead of being destroyed.
+    CUR2="$(stat -L -c %s "$HLF" 2>/dev/null)"
+    if [ "$CUR2" != "$POSTSIZE" ]; then
+      echo "omarchledger: the journal changed while preparing the undo; refusing to undo" >&2
       exit 1
     fi
     if ! truncate -s "$PRESIZE" "$HLF" 2>/dev/null; then

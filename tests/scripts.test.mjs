@@ -9,7 +9,7 @@
   Every test works on throwaway journals inside a mkdtemp sandbox — the
   user's real journal is never touched.
 */
-import { spawnSync } from 'node:child_process'
+import { spawnSync, spawn } from 'node:child_process'
 import { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, readFileSync, statSync, existsSync, rmSync, readdirSync, chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -358,6 +358,34 @@ export async function run(s) {
       const { j, a } = await addForUndo(dir)
       const r = runScript(undo, [j, String(a.post), String(a.post), a.sha])
       eq(r.code, 1)
+    })
+
+    await s.test('undo: waits for a concurrent lock holder, then succeeds', async () => {
+      if (!hasHledger) return s.skip('hledger not on PATH')
+      const dir = path.join(root, 'undo-lockwait')
+      mkdirSync(dir)
+      const { j, before, a } = await addForUndo(dir)
+      const h = spawn('flock', [j, '-c', 'sleep 2'])
+      const t0 = Date.now()
+      const r = runScript(undo, [j, String(a.pre), String(a.post), a.sha])
+      const elapsed = Date.now() - t0
+      h.kill()
+      eq(r.code, 0, r.stderr)
+      assert(elapsed >= 1000, "undo must have waited for the lock, took " + elapsed + "ms")
+      eq(readFileSync(j).equals(before), true, "byte-identical restore")
+    })
+
+    await s.test('undo: refuses cleanly when the lock cannot be acquired', async () => {
+      if (!hasHledger) return s.skip('hledger not on PATH')
+      const dir = path.join(root, 'undo-lockbusy')
+      mkdirSync(dir)
+      const { j, a } = await addForUndo(dir)
+      const h = spawn('flock', [j, '-c', 'sleep 6'])
+      const r = runScript(undo, [j, String(a.pre), String(a.post), a.sha])
+      h.kill()
+      eq(r.code, 1, "lock timeout must refuse")
+      assert(r.stderr.includes("busy"), r.stderr)
+      assert(readFileSync(j).includes("Script test"), "entry preserved")
     })
 
     await s.test('undo: double undo refused (second sees size mismatch)', async () => {
