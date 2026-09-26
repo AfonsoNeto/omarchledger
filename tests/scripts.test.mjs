@@ -520,6 +520,8 @@ export async function run(s) {
       assert(script.includes('flock -w'), "undo must hold the journal lock")
       assert(script.includes('conv=notrunc'), "undo must write in place")
       assert(!script.includes('truncate -s'), "undo must never truncate")
+      assert(script.includes('-lt "$POSTSIZE"'), "pre-write shrink guard required")
+      assert(script.includes('-lt "$S_PRE"'), "post-write shrink detection required")
       eq((script.match(/RSHA2?="/g) || []).length, 3, "region must be verified at start, at the fallback offset, and immediately before the write")
       assert(script.includes('/proc/self/fd/9'), "operations must target the locked inode")
     })

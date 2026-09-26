@@ -439,9 +439,22 @@ Item {
       echo "omarchledger: the journal region changed while preparing the undo; refusing to undo" >&2
       exit 1
     fi
-    # In-place same-length write: nothing outside the verified region is
-    # touched, so no concurrent append can ever be affected.
+    # A concurrent writer cannot lose data to this undo (the write covers
+    # only the verified region and appends land at EOF), but a writer that
+    # SHRINKS the journal in the window between the last verification and
+    # the write would leave a NUL hole when the in-place write extends the
+    # file again. Guard before, detect after - never silently.
+    S_PRE="$(stat -L -c %s "$JF" 2>/dev/null)"
+    if [ -z "$S_PRE" ] || [ "$S_PRE" -lt "$POSTSIZE" ]; then
+      echo "omarchledger: the journal changed while preparing the undo; refusing to undo" >&2
+      exit 1
+    fi
     printf "%s" "$TOMB" | dd of="$JF" bs=1 seek="$OFFSET" conv=notrunc 2>/dev/null
+    S_POST="$(stat -L -c %s "$JF" 2>/dev/null)"
+    if [ -z "$S_POST" ] || [ "$S_POST" -lt "$S_PRE" ]; then
+      echo "omarchledger: the journal was truncated by another process during the undo; the file may now contain gaps - restore it (e.g. git restore) before continuing" >&2
+      exit 2
+    fi
     echo "UNDONE"
   ' 
 
