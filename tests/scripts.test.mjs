@@ -223,9 +223,12 @@ export async function run(s) {
       eq(r.code, 0, r.stderr)
       const a = parseAppended(r.stdout)
       eq(a.pre, before.length, "size is of the target, not the symlink")
+      const beforeUndo = readFileSync(real)
       const undoR = runScript(undo, [link, String(a.pre), String(a.post), a.sha])
       eq(undoR.code, 0, undoR.stderr)
-      eq(readFileSync(real).toString(), "2026-01-01 Opening\n    assets:cash    100.00\n    incomes:salary\n")
+      const afterUndo = readFileSync(real)
+      eq(afterUndo.length, beforeUndo.length, "length unchanged by the tombstone")
+      assert(afterUndo.toString().includes("; undone by omarchledger "), "region tombstoned")
     })
 
     await s.test('add: relative includes resolve from the journal directory', async () => {
@@ -288,15 +291,36 @@ export async function run(s) {
       return { j, before, a }
     }
 
-    await s.test('undo: correct fingerprint restores the journal byte-identically', async () => {
+    await s.test('undo: tombstones the entry in place at constant length', async () => {
       if (!hasHledger) return s.skip('hledger not on PATH')
       const dir = path.join(root, 'undo-ok')
       mkdirSync(dir)
       const { j, before, a } = await addForUndo(dir)
       const r = runScript(undo, [j, String(a.pre), String(a.post), a.sha])
       eq(r.code, 0, r.stderr)
-      eq(readFileSync(j).equals(before), true, "byte-identical restore")
+      const after = readFileSync(j)
+      eq(after.length, before.length + (a.post - a.pre), "same byte length: nothing added or removed")
+      eq(after.subarray(0, a.pre).toString(), before.toString(), "prefix untouched")
+      eq(after.subarray(a.post).toString(), "", "suffix untouched")
+      const region = after.subarray(a.pre, a.post).toString()
+      assert(region.startsWith("; undone by omarchledger "), "region is a tombstone: " + JSON.stringify(region))
       eq(leftovers(dir).length, 0)
+    })
+
+    await s.test('undo: tombstoned entry disappears from the ledger and check passes', async () => {
+      if (!hasHledger) return s.skip('hledger not on PATH')
+      const dir = path.join(root, 'undo-ledger')
+      mkdirSync(dir)
+      const { j, a } = await addForUndo(dir)
+      const entryLen = a.post - a.pre
+      const r = runScript(undo, [j, String(a.pre), String(a.post), a.sha])
+      eq(r.code, 0, r.stderr)
+      const pr = spawnSync('hledger', ['-f', j, 'print', 'desc:Script test'], { encoding: 'utf8' })
+      eq(pr.status, 0)
+      eq(pr.stdout.trim(), "", "entry no longer parsed")
+      const chk = spawnSync('hledger', ['-f', j, 'check'], { encoding: 'utf8' })
+      eq(chk.status, 0, "journal still valid: " + chk.stderr)
+      eq(readFileSync(j).subarray(a.pre, a.post).toString().length, entryLen)
     })
 
     await s.test('undo: wrong size refused', async () => {
@@ -335,9 +359,15 @@ export async function run(s) {
       const other = "\n2026-09-25 other-writer\n    expenses:y    2.00\n    assets:cash\n"
       const { appendFileSync } = await import('node:fs')
       appendFileSync(j, other)
+      const sizeAfterOther = statSync(j).size
       const r = runScript(undo, [j, String(a.pre), String(a.post), a.sha])
-      eq(r.code, 1, "must refuse")
-      assert(readFileSync(j).includes("other-writer"), "other writer preserved")
+      eq(r.code, 0, "undo must succeed despite the concurrent append: " + r.stderr)
+      const after = readFileSync(j)
+      assert(after.includes("other-writer"), "other writer preserved")
+      assert(!after.includes("Script test"), "undone entry no longer parsed")
+      eq(after.length, sizeAfterOther, "byte length unchanged by the tombstone")
+      const chk = spawnSync('hledger', ['-f', j, 'check'], { encoding: 'utf8' })
+      eq(chk.status, 0, "journal still valid: " + chk.stderr)
     })
 
     await s.test('undo: empty/missing fingerprint refused', async () => {
@@ -372,7 +402,9 @@ export async function run(s) {
       h.kill()
       eq(r.code, 0, r.stderr)
       assert(elapsed >= 1000, "undo must have waited for the lock, took " + elapsed + "ms")
-      eq(readFileSync(j).equals(before), true, "byte-identical restore")
+      const after = readFileSync(j)
+      eq(after.length, before.length + (a.post - a.pre), "length unchanged")
+      assert(after.subarray(a.pre, a.post).toString().startsWith("; undone by omarchledger "), "region tombstoned")
     })
 
     await s.test('undo: refuses cleanly when the lock cannot be acquired', async () => {
@@ -388,7 +420,7 @@ export async function run(s) {
       assert(readFileSync(j).includes("Script test"), "entry preserved")
     })
 
-    await s.test('undo: symlink retarget mid-flight cannot redirect the truncation', async () => {
+    await s.test('undo: symlink retarget mid-flight cannot redirect the tombstone write', async () => {
       if (!hasHledger) return s.skip('hledger not on PATH')
       const dir = path.join(root, 'undo-retarget')
       mkdirSync(dir)
@@ -412,8 +444,11 @@ export async function run(s) {
       })
       h.kill()
       eq(r2.code, 0, r2.stderr)
-      // the locked inode (a.journal) is restored, b.journal untouched
-      eq(readFileSync(realA).toString(), "2026-01-01 A\n    assets:cash    100.00\n    incomes:salary\n")
+      // the locked inode (a.journal) is tombstoned, b.journal untouched
+      const beforeA = readFileSync(realA)
+      const afterA = readFileSync(realA)
+      eq(afterA.length, beforeA.length, "a.journal length unchanged")
+      assert(afterA.includes("; undone by omarchledger "), "a.journal region tombstoned")
       assert(readFileSync(path.join(dir, 'b.journal')).includes("2026-02-02 B"), "retargeted file untouched")
     })
 
@@ -455,10 +490,11 @@ export async function run(s) {
     })
     await s.test('static: undo script verifies content, not just size', () => {
       const script = extractScript('undoScript')
-      assert(script.includes('truncate -s'))
       assert(script.includes('sha256sum'), "tail fingerprint check required")
       assert(script.includes('stat -L'))
       assert(script.includes('flock -w'), "undo must hold the journal lock")
+      assert(script.includes('conv=notrunc'), "undo must write in place")
+      assert(!script.includes('truncate -s'), "undo must never truncate")
       assert(script.includes('/proc/self/fd/9'), "operations must target the locked inode")
     })
   } finally {

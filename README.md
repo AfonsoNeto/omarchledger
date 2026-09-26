@@ -130,11 +130,13 @@ This plugin takes journal integrity seriously:
 2. **Only if validation passes** is the entry appended to the real journal.
    On failure, hledger's error message is shown verbatim and nothing is
    written.
-3. The **UNDO** button records the journal's exact byte size before and after
-   the append. It takes an exclusive lock on the journal, re-verifies the size
-   and a fingerprint of the appended bytes, and only then truncates back —
-   refusing (never clobbering) if anything else changed the file, including
-   a writer racing inside the undo itself.
+3. The **UNDO** button never deletes bytes. After re-verifying a
+   fingerprint of the transaction's byte range, it rewrites exactly that
+   range in place — at constant length — with comment lines hledger ignores.
+   Nothing outside the verified range is touched, so no concurrent editor or
+   process appending to the journal (with or without locks) can ever lose
+   data. An undo also still works when other transactions were added after
+   the one being undone.
 4. Temporary files are always cleaned up, even on failure.
 5. Transaction data **never appears on a command line**. The entry is piped
    to the helper script's stdin (only a line count travels as an argument),

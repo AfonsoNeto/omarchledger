@@ -320,25 +320,16 @@ Item {
       echo "omarchledger: journal is not a regular file; refusing to write" >&2
       exit 5
     fi
-    if [ ! -r "$HLF" ]; then
-      echo "omarchledger: journal is not readable" >&2
+    if [ ! -r "$HLF" ] || [ ! -w "$HLF" ]; then
+      echo "omarchledger: journal is not readable/writable" >&2
       exit 5
     fi
-    if [ ! -w "$HLF" ]; then
-      echo "omarchledger: journal is not writable" >&2
-      exit 5
-    fi
-    # Serialize against other plugin instances (the bar exists per screen,
-    # so two panels can be live) and hold the lock across verify AND
-    # truncate: an append that lands inside this window must never be
-    # truncated away. Non-cooperative writers are still caught by the size
-    # and tail checks; the final re-compare below narrows their window to
-    # the last two syscalls.
-    #
-    # The fd is opened read-write and every later operation goes through
-    # /proc/self/fd/9, which re-opens the LOCKED inode: a symlink retarget
-    # between the checks and the truncate can never redirect the mutation
-    # to a different file than the one that was verified.
+    # Undo is NON-DESTRUCTIVE by construction: it never removes bytes. The
+    # byte range of the transaction is rewritten IN PLACE, at constant length,
+    # with comment lines hledger ignores. A concurrent writer appending
+    # without our lock can therefore never lose data - appends land at EOF,
+    # outside the rewritten range, no matter how they interleave. flock
+    # only serializes instances of this plugin itself.
     exec 9<>"$HLF" || { echo "omarchledger: cannot open the journal" >&2; exit 5; }
     if ! flock -w 3 9; then
       echo "omarchledger: the journal is busy; try again" >&2
@@ -350,16 +341,23 @@ Item {
       echo "omarchledger: cannot read the journal file" >&2
       exit 5
     fi
-    if [ "$CUR" != "$POSTSIZE" ]; then
+    # The entry may no longer be the last thing in the journal (other
+    # transactions may have been added after it), so only a shrinking file
+    # means our region is gone.
+    if [ "$CUR" -lt "$POSTSIZE" ]; then
       echo "omarchledger: the journal changed since the transaction was added; refusing to undo" >&2
       exit 1
     fi
-    # The tail must be exactly what this plugin appended; a same-size edit
-    # or a concurrent writer must never be truncated away.
     if [ -z "$ESHA" ]; then
       echo "omarchledger: no transaction fingerprint recorded; refusing to undo" >&2
       exit 1
     fi
+    TLEN=$((POSTSIZE - PRESIZE))
+    case "$TLEN" in \'\'|*[!0-9]*|0)
+      echo "omarchledger: the journal changed since the transaction was added; refusing to undo" >&2
+      exit 1
+    ;;
+    esac
     TMP=""
     cleanup() { [ -n "$TMP" ] && rm -f -- "$TMP"; }
     trap cleanup EXIT INT TERM HUP
@@ -371,34 +369,53 @@ Item {
       echo "omarchledger: cannot create a secure temporary file" >&2
       exit 5
     fi
-    TLEN=$((POSTSIZE - PRESIZE))
-    case "$TLEN" in \'\'|*[!0-9]*|0)
-      echo "omarchledger: the journal changed since the transaction was added; refusing to undo" >&2
-      exit 1
-    ;;
-    esac
-    tail -c "$TLEN" "$JF" > "$TMP" 2>/dev/null
-    TSHA="$(sha256sum "$TMP" | cut -d" " -f1)"
+    # Verify the region is still exactly what this plugin appended. The
+    # read is by offset: content after the entry (other transactions) does
+    # not affect it.
+    dd if="$JF" bs=1 skip="$PRESIZE" count="$TLEN" of="$TMP" 2>/dev/null
+    RSHA="$(sha256sum "$TMP" | cut -d" " -f1)"
     cleanup
     trap - EXIT INT TERM HUP
-    if [ "$TSHA" != "$ESHA" ]; then
-      echo "omarchledger: the journal tail does not match the added transaction; refusing to undo" >&2
+    if [ "$RSHA" != "$ESHA" ]; then
+      echo "omarchledger: the journal region does not match the added transaction; refusing to undo" >&2
       exit 1
     fi
-    # Atomic-compare half: re-verify the size as the last step before
-    # mutating, so an append racing between the checks and the truncate is
-    # refused instead of being destroyed.
-    CUR2="$(stat -L -c %s "$JF" 2>/dev/null)"
-    if [ "$CUR2" != "$POSTSIZE" ]; then
-      echo "omarchledger: the journal changed while preparing the undo; refusing to undo" >&2
-      exit 1
+    # Build the same-length tombstone: comment lines only, padded to the
+    # exact byte length so nothing outside the region moves.
+    SHA8="$(printf "%s" "$ESHA" | cut -c1-8)"
+    TOMB=""
+    BUDGET=$TLEN
+    HEAD="; undone by omarchledger $SHA8"
+    if [ "$BUDGET" -gt $(( ${#HEAD} + 1 )) ]; then
+      TOMB="$HEAD
+"
+      BUDGET=$(( BUDGET - ${#HEAD} - 1 ))
     fi
-    if ! truncate -s "$PRESIZE" "$JF" 2>/dev/null; then
-      echo "omarchledger: cannot write to the journal file" >&2
+    if [ "$BUDGET" -ge 3 ]; then
+      PAD="$(printf "%${BUDGET}s" "")"
+      TOMB="$TOMB; ${PAD%???}
+"
+      BUDGET=0
+    fi
+    while [ "$BUDGET" -ge 2 ]; do
+      TOMB="$TOMB;
+"
+      BUDGET=$(( BUDGET - 2 ))
+    done
+    if [ "$BUDGET" -eq 1 ]; then
+      TOMB="$TOMB
+"
+    fi
+    if [ "$(printf "%s" "$TOMB" | wc -c)" -ne "$TLEN" ]; then
+      echo "omarchledger: internal error building the tombstone" >&2
       exit 5
     fi
+    # In-place same-length write: nothing outside the verified region is
+    # touched, so no concurrent append can ever be affected.
+    printf "%s" "$TOMB" | dd of="$JF" bs=1 seek="$PRESIZE" conv=notrunc 2>/dev/null
     echo "UNDONE"
-  '
+  ' 
+
 
   /* ---- entry building ---------------------------------------------------- */
 
@@ -757,7 +774,7 @@ Item {
         root.postAddSize = -1
         root.entrySha256 = ""
         root.addOk = true
-        root.addMessage = "Transaction removed."
+        root.addMessage = "Transaction undone (commented out)."
       }
       root.undoFinished(code === 0)
     }
