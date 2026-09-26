@@ -11,7 +11,7 @@ the QML sources, so the tests always exercise the code that ships.
 | Suite | What it covers | Needs hledger? |
 | --- | --- | --- |
 | `unit.test.mjs` (46) | Every pure-JS function: entry building + line-separator flattening (injection guard), balance-sheet/stats/print parsers, live auto-balancing, amount parsing, negative detection, regex escaping, stale-journal detection | no |
-| `scripts.test.mjs` (31) | The embedded bash helpers: journal/binary resolution (overrides, FIFO/dangling-symlink rejection), validate-before-append (byte-exact writes, unbalanced rejection, symlinked journals, relative `include`s, special characters, stress postings), fingerprint-protected undo (size mismatch, same-size tamper, concurrent writer, lock contention), input validation (`NLINES`/`TLEN`/empty query), temp-file hygiene | only for behavior tests; plumbing tests use a stub binary |
+| `scripts.test.mjs` (34) | The embedded bash helpers: journal/binary resolution (overrides, FIFO/dangling-symlink rejection), validate-before-append (byte-exact writes, unbalanced rejection, symlinked journals, relative `include`s, special characters, stress postings), fingerprint-protected undo (size mismatch, same-size tamper, concurrent writer, lock contention), input validation (`NLINES`/`TLEN`/empty query), temp-file hygiene | only for behavior tests; plumbing tests use a stub binary |
 | `static.test.mjs` (12) | Manifest contract (id = directory name, namespaced, not reserved), `moduleName` agreement between BarWidget and Panel, bar-widget lifecycle contract, **privacy blacklist** over shipped files, helper-input validation markers, `omarchy plugin validate` and `qmllint` when installed | no |
 
 Tests never touch the user's real journal: all fixtures are synthetic and
