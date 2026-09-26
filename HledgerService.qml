@@ -66,6 +66,7 @@ Item {
     root.preAddSize = -1
     root.postAddSize = -1
     root.entrySha256 = ""
+    root.entryLen = -1
   }
 
   /* ---- data stores ------------------------------------------------------ */
@@ -93,6 +94,7 @@ Item {
   property int preAddSize: -1
   property int postAddSize: -1
   property string entrySha256: ""
+  property int entryLen: -1
   property bool canUndo: false
 
   /* ---- busy flags ------------------------------------------------------- */
@@ -300,14 +302,16 @@ Item {
     fi
     NEWSIZE="$(stat -L -c %s "$JF" 2>/dev/null)"
     ESHA="$(printf "%s" "$ENTRY" | sha256sum | cut -d" " -f1)"
-    echo "APPENDED:$SIZE:$NEWSIZE:$ESHA"
+    ELEN="$(printf "%s" "$ENTRY" | wc -c)"
+    echo "APPENDED:$SIZE:$NEWSIZE:$ESHA:$ELEN"
   '
 
   function undoLastAdd() {
     if (!root.canUndo || root.busyAdd) return
     root.busyAdd = true
     undoProc.command = ["bash", "-c", undoScript, "omarchledger", root.journalFile,
-      String(root.preAddSize), String(root.postAddSize), root.entrySha256]
+      String(root.preAddSize), String(root.postAddSize), root.entrySha256,
+      String(root.entryLen)]
     undoProc.running = true
   }
 
@@ -316,6 +320,7 @@ Item {
     PRESIZE="$2"
     POSTSIZE="$3"
     ESHA="$4"
+    TLEN="$5"
     if [ ! -f "$HLF" ]; then
       echo "omarchledger: journal is not a regular file; refusing to write" >&2
       exit 5
@@ -352,7 +357,6 @@ Item {
       echo "omarchledger: no transaction fingerprint recorded; refusing to undo" >&2
       exit 1
     fi
-    TLEN=$((POSTSIZE - PRESIZE))
     case "$TLEN" in \'\'|*[!0-9]*|0)
       echo "omarchledger: the journal changed since the transaction was added; refusing to undo" >&2
       exit 1
@@ -371,9 +375,24 @@ Item {
     fi
     # Verify the region is still exactly what this plugin appended. The
     # read is by offset: content after the entry (other transactions) does
-    # not affect it.
+    # not affect it. If an external writer interleaved an append between
+    # size capture of the add and its append, our entry sits at the END of
+    # the recorded span instead of its start (POSTSIZE - TLEN) - try that
+    # offset too before giving up, so undo is not permanently bricked for
+    # the entry.
     dd if="$JF" bs=1 skip="$PRESIZE" count="$TLEN" of="$TMP" 2>/dev/null
     RSHA="$(sha256sum "$TMP" | cut -d" " -f1)"
+    OFFSET="$PRESIZE"
+    if [ "$RSHA" != "$ESHA" ]; then
+      ALT=$((POSTSIZE - TLEN))
+      if [ "$ALT" -gt "$PRESIZE" ]; then
+        dd if="$JF" bs=1 skip="$ALT" count="$TLEN" of="$TMP" 2>/dev/null
+        RSHA="$(sha256sum "$TMP" | cut -d" " -f1)"
+        if [ "$RSHA" = "$ESHA" ]; then
+          OFFSET="$ALT"
+        fi
+      fi
+    fi
     if [ "$RSHA" != "$ESHA" ]; then
       echo "omarchledger: the journal region does not match the added transaction; refusing to undo" >&2
       exit 1
@@ -412,7 +431,7 @@ Item {
     # moment, so re-read the region and confirm it is still the transaction
     # this undo was recorded for. Verify-then-write is now two adjacent
     # steps with nothing in between.
-    dd if="$JF" bs=1 skip="$PRESIZE" count="$TLEN" of="$TMP" 2>/dev/null
+    dd if="$JF" bs=1 skip="$OFFSET" count="$TLEN" of="$TMP" 2>/dev/null
     RSHA2="$(sha256sum "$TMP" | cut -d" " -f1)"
     cleanup
     trap - EXIT INT TERM HUP
@@ -422,7 +441,7 @@ Item {
     fi
     # In-place same-length write: nothing outside the verified region is
     # touched, so no concurrent append can ever be affected.
-    printf "%s" "$TOMB" | dd of="$JF" bs=1 seek="$PRESIZE" conv=notrunc 2>/dev/null
+    printf "%s" "$TOMB" | dd of="$JF" bs=1 seek="$OFFSET" conv=notrunc 2>/dev/null
     echo "UNDONE"
   ' 
 
@@ -740,9 +759,10 @@ Item {
             root.preAddSize = parseInt(parts[0], 10)
             root.postAddSize = parts.length > 1 ? parseInt(parts[1], 10) : -1
             root.entrySha256 = parts.length > 2 ? parts[2] : ""
+            root.entryLen = parts.length > 3 ? parseInt(parts[3], 10) : -1
             root.canUndo = !isNaN(root.preAddSize) && root.preAddSize >= 0
               && !isNaN(root.postAddSize) && root.postAddSize >= 0
-              && root.entrySha256 !== ""
+              && root.entrySha256 !== "" && root.entryLen > 0
           }
         }
       }
@@ -783,6 +803,7 @@ Item {
         root.preAddSize = -1
         root.postAddSize = -1
         root.entrySha256 = ""
+        root.entryLen = -1
         root.addOk = true
         root.addMessage = "Transaction undone (commented out)."
       }

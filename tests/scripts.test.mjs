@@ -51,9 +51,9 @@ function leftovers(dir) {
 }
 
 function parseAppended(stdout) {
-  const m = stdout.match(/APPENDED:(\d+):(\d+):([0-9a-f]{64})/)
-  assert(m, "expected APPENDED:<pre>:<post>:<sha> marker, got: " + JSON.stringify(stdout))
-  return { pre: +m[1], post: +m[2], sha: m[3] }
+  const m = stdout.match(/APPENDED:(\d+):(\d+):([0-9a-f]{64}):(\d+)/)
+  assert(m, "expected APPENDED:<pre>:<post>:<sha>:<len> marker, got: " + JSON.stringify(stdout))
+  return { pre: +m[1], post: +m[2], sha: m[3], len: +m[4] }
 }
 
 const ENTRY = "\n2026-09-25 Script test\n    expenses:food    £7.00\n    assets:cash\n"
@@ -224,7 +224,7 @@ export async function run(s) {
       const a = parseAppended(r.stdout)
       eq(a.pre, before.length, "size is of the target, not the symlink")
       const beforeUndo = readFileSync(real)
-      const undoR = runScript(undo, [link, String(a.pre), String(a.post), a.sha])
+      const undoR = runScript(undo, [link, String(a.pre), String(a.post), a.sha, String(a.len)])
       eq(undoR.code, 0, undoR.stderr)
       const afterUndo = readFileSync(real)
       eq(afterUndo.length, beforeUndo.length, "length unchanged by the tombstone")
@@ -296,7 +296,7 @@ export async function run(s) {
       const dir = path.join(root, 'undo-ok')
       mkdirSync(dir)
       const { j, before, a } = await addForUndo(dir)
-      const r = runScript(undo, [j, String(a.pre), String(a.post), a.sha])
+      const r = runScript(undo, [j, String(a.pre), String(a.post), a.sha, String(a.len)])
       eq(r.code, 0, r.stderr)
       const after = readFileSync(j)
       eq(after.length, before.length + (a.post - a.pre), "same byte length: nothing added or removed")
@@ -307,13 +307,38 @@ export async function run(s) {
       eq(leftovers(dir).length, 0)
     })
 
+    await s.test('undo: entry interleaved with a foreign append is still found and tombstoned', async () => {
+      if (!hasHledger) return s.skip('hledger not on PATH')
+      const dir = path.join(root, 'undo-interleaved')
+      mkdirSync(dir)
+      const { j, before, a } = await addForUndo(dir)
+      // Simulate an external writer whose append landed between the size
+      // capture and the append of the original add: insert foreign bytes
+      // BEFORE the entry, shifting it to the end of the recorded region,
+      // and pretend the recorded sizes were captured before that append.
+      const foreign = Buffer.from("2026-09-25 foreign txn\n    expenses:y    2.00\n    assets:cash\n")
+      const data = readFileSync(j)
+      const shifted = Buffer.concat([data.subarray(0, a.pre), foreign, data.subarray(a.pre)])
+      writeFileSync(j, shifted)
+      const entryLen = a.post - a.pre
+      const r = runScript(undo, [j, String(a.pre), String(a.post + foreign.length), a.sha, String(entryLen)])
+      eq(r.code, 0, "fallback probe must locate the shifted entry: " + r.stderr)
+      const after = readFileSync(j)
+      eq(after.length, shifted.length, "length unchanged")
+      assert(after.toString().includes("foreign txn"), "foreign txn preserved")
+      const region = after.subarray(a.pre + foreign.length, a.post + foreign.length).toString()
+      assert(region.startsWith("; undone by omarchledger "), "shifted entry tombstoned at its new offset")
+      const chk = spawnSync('hledger', ['-f', j, 'check'], { encoding: 'utf8' })
+      eq(chk.status, 0, "journal still valid: " + chk.stderr)
+    })
+
     await s.test('undo: tombstoned entry disappears from the ledger and check passes', async () => {
       if (!hasHledger) return s.skip('hledger not on PATH')
       const dir = path.join(root, 'undo-ledger')
       mkdirSync(dir)
       const { j, a } = await addForUndo(dir)
       const entryLen = a.post - a.pre
-      const r = runScript(undo, [j, String(a.pre), String(a.post), a.sha])
+      const r = runScript(undo, [j, String(a.pre), String(a.post), a.sha, String(a.len)])
       eq(r.code, 0, r.stderr)
       const pr = spawnSync('hledger', ['-f', j, 'print', 'desc:Script test'], { encoding: 'utf8' })
       eq(pr.status, 0)
@@ -345,7 +370,7 @@ export async function run(s) {
       if (evil.length > tlen) evil = evil.subarray(0, tlen)
       else evil = Buffer.concat([evil, Buffer.alloc(tlen - evil.length, 0x20)])
       writeFileSync(j, Buffer.concat([data.subarray(0, a.pre), evil]))
-      const r = runScript(undo, [j, String(a.pre), String(a.post), a.sha])
+      const r = runScript(undo, [j, String(a.pre), String(a.post), a.sha, String(a.len)])
       eq(r.code, 1, "must refuse")
       assert(r.stderr.includes("does not match"), r.stderr)
       assert(readFileSync(j).includes("EVIL"), "tampered content must not be truncated")
@@ -360,7 +385,7 @@ export async function run(s) {
       const { appendFileSync } = await import('node:fs')
       appendFileSync(j, other)
       const sizeAfterOther = statSync(j).size
-      const r = runScript(undo, [j, String(a.pre), String(a.post), a.sha])
+      const r = runScript(undo, [j, String(a.pre), String(a.post), a.sha, String(a.len)])
       eq(r.code, 0, "undo must succeed despite the concurrent append: " + r.stderr)
       const after = readFileSync(j)
       assert(after.includes("other-writer"), "other writer preserved")
@@ -386,7 +411,7 @@ export async function run(s) {
       const dir = path.join(root, 'undo-tlen')
       mkdirSync(dir)
       const { j, a } = await addForUndo(dir)
-      const r = runScript(undo, [j, String(a.post), String(a.post), a.sha])
+      const r = runScript(undo, [j, String(a.post), String(a.post), a.sha, String(a.len)])
       eq(r.code, 1)
     })
 
@@ -397,7 +422,7 @@ export async function run(s) {
       const { j, before, a } = await addForUndo(dir)
       const h = spawn('flock', [j, '-c', 'sleep 2'])
       const t0 = Date.now()
-      const r = runScript(undo, [j, String(a.pre), String(a.post), a.sha])
+      const r = runScript(undo, [j, String(a.pre), String(a.post), a.sha, String(a.len)])
       const elapsed = Date.now() - t0
       h.kill()
       eq(r.code, 0, r.stderr)
@@ -413,7 +438,7 @@ export async function run(s) {
       mkdirSync(dir)
       const { j, a } = await addForUndo(dir)
       const h = spawn('flock', [j, '-c', 'sleep 6'])
-      const r = runScript(undo, [j, String(a.pre), String(a.post), a.sha])
+      const r = runScript(undo, [j, String(a.pre), String(a.post), a.sha, String(a.len)])
       h.kill()
       eq(r.code, 1, "lock timeout must refuse")
       assert(r.stderr.includes("busy"), r.stderr)
@@ -435,13 +460,13 @@ export async function run(s) {
       // waits: by the time the undo runs its checks, the path points to
       // b.journal, but its fd is bound to the a.journal inode it opened.
       const h = spawn('flock', [link, '-c', 'sleep 2'])
-      const proc = spawn('bash', [undo, link, String(a.pre), String(a.post), a.sha], { encoding: 'utf8' })
+      const proc = spawn('bash', [undo, link, String(a.pre), String(a.post), a.sha, String(a.len)])
+      let undoErr = ''
+      proc.stderr.on('data', d => { undoErr += d })
       await new Promise(res => setTimeout(res, 500))
       rmSync(link)
       symlinkSync(path.join(dir, 'b.journal'), link)
-      const r2 = await new Promise(res => {
-        proc.on('close', (code) => res({ code, stdout: proc.stdout.read() || '', stderr: proc.stderr.read() || '' }))
-      })
+      const r2 = await new Promise(res => proc.on('close', code => res({ code, stderr: undoErr })))
       h.kill()
       eq(r2.code, 0, r2.stderr)
       // the locked inode (a.journal) is tombstoned, b.journal untouched
@@ -457,8 +482,8 @@ export async function run(s) {
       const dir = path.join(root, 'undo-twice')
       mkdirSync(dir)
       const { j, a } = await addForUndo(dir)
-      eq(runScript(undo, [j, String(a.pre), String(a.post), a.sha]).code, 0)
-      const r = runScript(undo, [j, String(a.pre), String(a.post), a.sha])
+      eq(runScript(undo, [j, String(a.pre), String(a.post), a.sha, String(a.len)]).code, 0)
+      const r = runScript(undo, [j, String(a.pre), String(a.post), a.sha, String(a.len)])
       eq(r.code, 1)
     })
 
@@ -495,7 +520,7 @@ export async function run(s) {
       assert(script.includes('flock -w'), "undo must hold the journal lock")
       assert(script.includes('conv=notrunc'), "undo must write in place")
       assert(!script.includes('truncate -s'), "undo must never truncate")
-      eq((script.match(/RSHA2?="/g) || []).length, 2, "region must be verified twice: before the build and immediately before the write")
+      eq((script.match(/RSHA2?="/g) || []).length, 3, "region must be verified at start, at the fallback offset, and immediately before the write")
       assert(script.includes('/proc/self/fd/9'), "operations must target the locked inode")
     })
   } finally {
