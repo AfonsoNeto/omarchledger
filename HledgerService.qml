@@ -374,8 +374,6 @@ Item {
     # not affect it.
     dd if="$JF" bs=1 skip="$PRESIZE" count="$TLEN" of="$TMP" 2>/dev/null
     RSHA="$(sha256sum "$TMP" | cut -d" " -f1)"
-    cleanup
-    trap - EXIT INT TERM HUP
     if [ "$RSHA" != "$ESHA" ]; then
       echo "omarchledger: the journal region does not match the added transaction; refusing to undo" >&2
       exit 1
@@ -409,6 +407,18 @@ Item {
     if [ "$(printf "%s" "$TOMB" | wc -c)" -ne "$TLEN" ]; then
       echo "omarchledger: internal error building the tombstone" >&2
       exit 5
+    fi
+    # Final verification immediately before the write: the build took a
+    # moment, so re-read the region and confirm it is still the transaction
+    # this undo was recorded for. Verify-then-write is now two adjacent
+    # steps with nothing in between.
+    dd if="$JF" bs=1 skip="$PRESIZE" count="$TLEN" of="$TMP" 2>/dev/null
+    RSHA2="$(sha256sum "$TMP" | cut -d" " -f1)"
+    cleanup
+    trap - EXIT INT TERM HUP
+    if [ "$RSHA2" != "$ESHA" ]; then
+      echo "omarchledger: the journal region changed while preparing the undo; refusing to undo" >&2
+      exit 1
     fi
     # In-place same-length write: nothing outside the verified region is
     # touched, so no concurrent append can ever be affected.
