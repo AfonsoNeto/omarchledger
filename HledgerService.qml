@@ -279,6 +279,15 @@ Item {
       printf "%s\n" "$CHECK" >&2
       exit 1
     fi
+    # Serialize the mutation window with undo and other plugin instances
+    # (two monitors = two live panels): an undo truncating during this
+    # append would otherwise interleave, and a concurrent append would be
+    # captured into the recorded sizes.
+    exec 9<"$HLF" || { echo "omarchledger: cannot open the journal" >&2; exit 5; }
+    if ! flock -w 3 9; then
+      echo "omarchledger: the journal is busy; try again" >&2
+      exit 1
+    fi
     SIZE="$(stat -L -c %s "$HLF" 2>/dev/null)"
     if [ -z "$SIZE" ]; then SIZE=0; fi
     if ! printf "%s" "$ENTRY" >> "$HLF" 2>/dev/null; then

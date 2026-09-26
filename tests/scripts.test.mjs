@@ -399,18 +399,36 @@ export async function run(s) {
     })
 
     /* ---------- static behavior anchors ---------- */
+    await s.test('add: waits for a concurrent lock holder, then succeeds', async () => {
+      if (!hasHledger) return s.skip('hledger not on PATH')
+      const dir = path.join(root, 'add-lockwait')
+      mkdirSync(dir)
+      const j = writeFile(dir, 'j.journal', "2026-01-01 Opening\n    assets:cash    100.00\n    incomes:salary\n")
+      const h = spawn('flock', [j, '-c', 'sleep 2'])
+      const t0 = Date.now()
+      const r = runScript(add, ['hledger', j, String(ENTRY_LINES)], ENTRY)
+      const elapsed = Date.now() - t0
+      h.kill()
+      eq(r.code, 0, r.stderr)
+      assert(elapsed >= 1000, "add must have waited for the lock, took " + elapsed + "ms")
+      assert(readFileSync(j).includes("Script test"), "entry appended after the wait")
+      eq(leftovers(dir).length, 0)
+    })
+
     await s.test('static: add script never takes the entry from argv', () => {
       const script = extractScript('addScript')
       assert(!script.includes('ENTRY="$3"'), "entry must not come from argv")
       assert(script.includes('read -r LINE'), "entry must be read from stdin")
       assert(script.includes('stat -L'), "sizes must dereference symlinks")
       assert(script.includes('mktemp'), "temp file must be mktemp")
+      assert(script.includes('flock -w'), "append must hold the journal lock")
     })
     await s.test('static: undo script verifies content, not just size', () => {
       const script = extractScript('undoScript')
       assert(script.includes('truncate -s'))
       assert(script.includes('sha256sum'), "tail fingerprint check required")
       assert(script.includes('stat -L'))
+      assert(script.includes('flock -w'), "undo must hold the journal lock")
     })
   } finally {
     rmSync(root, { recursive: true, force: true })
